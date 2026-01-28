@@ -79,57 +79,6 @@ npm run android
 npm run ios
 ```
 
-## Luồng hoạt động
-
-### Authentication Flow
-1. App khởi động → kiểm tra token trong SecureStore
-2. Nếu có token → gọi API lấy profile → vào Main screens
-3. Nếu không có token hoặc token hết hạn → vào Auth screens
-
-### Refresh Token Flow
-- Axios interceptor tự động:
-  1. Nếu API trả về 401 → gọi refresh token API
-  2. Nếu refresh thành công → lưu token mới → retry request gốc
-  3. Nếu refresh thất bại → logout user
-
-### Apply Job Flow
-1. User xem chi tiết việc làm → nhấn "Ứng tuyển"
-2. Modal hiện ra danh sách CV của user
-3. CV chính được auto-select (có thể đổi)
-4. User xác nhận → tạo Application
-
-## Backend API cần có
-
-App này cần backend hỗ trợ các endpoints:
-
-- `POST /auth/login` - Đăng nhập
-- `POST /auth/register` - Đăng ký
-- `POST /auth/refresh` - Refresh token
-- `POST /auth/forgot-password` - Quên mật khẩu
-- `GET /auth/account` - Lấy profile
-
-- `GET /jobs` - Danh sách việc làm
-- `GET /jobs/:id` - Chi tiết việc làm
-
-- `GET /companies` - Danh sách công ty
-- `GET /companies/:id` - Chi tiết công ty
-
-- `GET /user-cvs` - Danh sách CV của user
-- `POST /user-cvs` - Upload CV
-- `PATCH /user-cvs/:id/set-primary` - Đặt CV chính
-- `DELETE /user-cvs/:id` - Xóa CV
-
-- `GET /applications` - Danh sách ứng tuyển
-- `GET /applications/:id` - Chi tiết ứng tuyển
-- `POST /applications` - Tạo ứng tuyển
-
-- `GET /comments` - Danh sách bình luận
-- `POST /comments` - Tạo bình luận
-- `DELETE /comments/:id` - Xóa bình luận
-
-- `GET /skills` - Danh sách kỹ năng
-- `GET /notifications` - Danh sách thông báo
-
 ## Lưu ý
 
 1. **Android Emulator trên Windows:**
