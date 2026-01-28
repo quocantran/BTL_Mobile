@@ -65,7 +65,7 @@ npm install
 ```
 
 2. **Cấu hình API URL:**
-Mở file `src/constants/index.ts` và cập nhật `API_URL` theo địa chỉ backend của bạn.
+Thay thế API_URL trong .env thành api backend của bạn.
 
 3. **Chạy ứng dụng:**
 ```bash
