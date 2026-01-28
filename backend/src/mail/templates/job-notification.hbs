@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Việc làm mới</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .job-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .job-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2563eb;
+      margin-bottom: 5px;
+    }
+    .company-name {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .salary {
+      font-size: 16px;
+      color: #10b981;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Việc làm phù hợp với bạn</h2>
+    <p>Xin chào {{subscriber.email}},</p>
+    <p>Dưới đây là các việc làm mới phù hợp với kỹ năng của bạn:</p>
+    
+    {{#each jobs}}
+    <div class="job-card">
+      <div class="job-title">{{this.name}}</div>
+      <div class="company-name">{{this.company.name}}</div>
+      <div class="salary">{{this.salary}}</div>
+      <p>{{this.location}}</p>
+    </div>
+    {{/each}}
+    
+    <div class="footer">
+      <p>Trân trọng,<br>Đội ngũ hỗ trợ</p>
+    </div>
+  </div>
+</body>
+</html>
