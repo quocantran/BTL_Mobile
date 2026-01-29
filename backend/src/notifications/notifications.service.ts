@@ -5,12 +5,14 @@ import { Notification, NotificationDocument, NotificationType } from './schemas/
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import mongoose from 'mongoose';
 import { IUser } from 'src/users/users.interface';
+import { NotificationsGateway } from './notifications.gateway';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectModel(Notification.name)
     private readonly notificationModel: SoftDeleteModel<NotificationDocument>,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(createNotificationDto: CreateNotificationDto) {
@@ -27,6 +29,9 @@ export class NotificationsService {
       type: type || NotificationType.SYSTEM,
       data,
     });
+
+    // Gửi socket tới user
+    this.notificationsGateway.sendToUser(userId, 'notification', notification);
 
     return notification;
   }
@@ -46,7 +51,12 @@ export class NotificationsService {
       data,
     }));
 
-    return this.notificationModel.insertMany(notifications);
+    const result = await this.notificationModel.insertMany(notifications);
+    // Gửi socket tới từng user
+    userIds.forEach((userId, idx) => {
+      this.notificationsGateway.sendToUser(userId, 'notification', result[idx]);
+    });
+    return result;
   }
 
   async findByUser(userId: string, page: number, limit: number) {

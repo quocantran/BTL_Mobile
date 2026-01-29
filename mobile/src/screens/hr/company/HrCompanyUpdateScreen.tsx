@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { api } from '@/services';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
 import { UploadLogo } from '@/components/company/UploadLogo';
@@ -58,12 +60,88 @@ const HrCompanyUpdateScreen: React.FC = () => {
   const pickAndUpload = async () => {
     setIsLogoUploading(true);
     try {
-      // You should use your UploadLogo logic here, this is a placeholder
-      // ...
-      // After upload:
-      // setFormData((prev) => ({ ...prev, companyLogoUrl: uploadedUrl }));
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+
+      if (result.canceled) {
+        setIsLogoUploading(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      let fileUri = asset.uri;
+      if (
+        fileUri &&
+        !fileUri.startsWith('file://') &&
+        !fileUri.startsWith('content://')
+      ) {
+        fileUri = 'file://' + fileUri;
+      }
+
+      const isWeb = typeof window !== 'undefined' && !!(window as any).document;
+      if (!isWeb) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      const uploadForm = new FormData();
+      if (isWeb && asset.file) {
+        uploadForm.append('fileUpload', asset.file);
+      } else if (isWeb) {
+        const response = await fetch(fileUri);
+        const blobData = await response.blob();
+        const mimeType = asset.mimeType || 'image/jpeg';
+        const file = new File([blobData], asset.fileName || 'logo.jpg', { type: mimeType });
+        uploadForm.append('fileUpload', file);
+      } else {
+        uploadForm.append('fileUpload', {
+          uri: fileUri,
+          type: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || 'logo.jpg',
+        } as any);
+      }
+
+      let uploadResp;
+      let lastError;
+      const maxRetries = 2;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          uploadResp = await api.post('/files/upload', uploadForm, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            transformRequest: (data) => data,
+            timeout: 60000,
+          });
+          break;
+        } catch (err: any) {
+          lastError = err;
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+      if (!uploadResp) {
+        throw lastError || new Error('Upload failed after retries');
+      }
+      const uploadedUrl = uploadResp?.data?.url || uploadResp?.data?.data?.url || uploadResp?.data;
+      if (!uploadedUrl) {
+        throw new Error('Không nhận được đường dẫn file từ server');
+      }
+      setFormData((prev) => ({
+        ...prev,
+        companyLogoUrl: uploadedUrl,
+      }));
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể tải logo');
+      console.error('Upload error:', error);
+      let message = 'Không thể tải logo';
+      if (typeof error === 'object' && error !== null) {
+        if ('response' in error && typeof (error as any).response?.data?.message === 'string') {
+          message = (error as any).response.data.message;
+        } else if ('message' in error && typeof (error as any).message === 'string') {
+          message = (error as any).message;
+        }
+      }
+      Alert.alert('Lỗi', message);
     } finally {
       setIsLogoUploading(false);
     }

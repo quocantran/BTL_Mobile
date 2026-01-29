@@ -15,6 +15,7 @@ import { CreateHrDto } from 'src/users/dto/create-hr.dto';
 import { CompaniesService } from 'src/companies/companies.service';
 import { Types } from 'mongoose';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationType } from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class AuthService {
@@ -330,7 +331,7 @@ export class AuthService {
         adminIds,
         'Đăng ký HR mới',
         content,
-        undefined,
+        NotificationType.SYSTEM,
         { companyId: company._id.toString() },
       );
     }

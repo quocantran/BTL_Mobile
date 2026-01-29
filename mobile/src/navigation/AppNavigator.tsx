@@ -1,71 +1,85 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
-import { notificationService } from '../services/notificationService';
-import { useIsFocused } from '@react-navigation/native';
-import { COLORS } from '../constants';
-import { useAppSelector } from '../store/hooks';
+import InterviewInviteScreen from '../screens/hr/jobs/InterviewInviteScreen';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
+import { View, Text } from "react-native";
+import { notificationService } from "../services/notificationService";
+import { connectNotificationSocket, disconnectNotificationSocket } from '../services/notificationSocket';
+import { useIsFocused } from "@react-navigation/native";
+import { COLORS } from "../constants";
+import { useAppSelector } from "../store/hooks";
 
 // Auth Screens
-import LoginScreen from '../screens/auth/LoginScreen';
-import RegisterScreen from '../screens/auth/RegisterScreen';
-import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import LoginScreen from "../screens/auth/LoginScreen";
+import RegisterScreen from "../screens/auth/RegisterScreen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 
 // Main Screens
-import HomeScreen from '../screens/main/HomeScreen';
-import JobsScreen from '../screens/main/JobsScreen';
-import CompaniesScreen from '../screens/main/CompaniesScreen';
-import NotificationsScreen from '../screens/main/NotificationsScreen';
-import ProfileScreen from '../screens/main/ProfileScreen';
+import HomeScreen from "../screens/main/HomeScreen";
+import JobsScreen from "../screens/main/JobsScreen";
+import CompaniesScreen from "../screens/main/CompaniesScreen";
+import NotificationsScreen from "../screens/main/NotificationsScreen";
+import ProfileScreen from "../screens/main/ProfileScreen";
 
 // Detail Screens
-import JobDetailScreen from '../screens/detail/JobDetailScreen';
-import ApplicationDetailScreen from '../screens/detail/ApplicationDetailScreen';
+import JobDetailScreen from "../screens/detail/JobDetailScreen";
+import ApplicationDetailScreen from "../screens/detail/ApplicationDetailScreen";
 
 // Profile Screens
-import EditProfileScreen from '../screens/profile/EditProfileScreen';
-import MyCVsScreen from '../screens/profile/MyCVsScreen';
-import MyApplicationsScreen from '../screens/profile/MyApplicationsScreen';
-import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
+import EditProfileScreen from "../screens/profile/EditProfileScreen";
+import MyCVsScreen from "../screens/profile/MyCVsScreen";
+import MyApplicationsScreen from "../screens/profile/MyApplicationsScreen";
+import ChangePasswordScreen from "../screens/profile/ChangePasswordScreen";
 
 // Admin Screens
-import UsersListScreen from '../screens/admin/user/UsersListScreen';
-import UserDetailScreen from '../screens/admin/user/UserDetailScreen';
-import UserFormScreen from '../screens/admin/user/UserFormScreen';
-import RegisterHrScreen from '@/screens/auth/RegisterRrScreen';
-import CompaniesListScreen from '@/screens/admin/company/CompaniesListScreen';
-import CompanyDetailScreen from '@/screens/admin/company/CompanyDetailScreen';
-import HrCompanyDetailScreen from '../screens/hr/company/HrCompanyDetailScreen';
-import HrCompanyUpdateScreen from '../screens/hr/company/HrCompanyUpdateScreen';
-import HrJobsListScreen from '../screens/hr/jobs/HrJobsListScreen';
-import HrJobDetailScreen from '../screens/hr/jobs/HrJobDetailScreen';
-import HrJobFormScreen from '../screens/hr/jobs/HrJobFormScreen';
+import UsersListScreen from "../screens/admin/user/UsersListScreen";
+import UserDetailScreen from "../screens/admin/user/UserDetailScreen";
+import UserFormScreen from "../screens/admin/user/UserFormScreen";
+import RegisterHrScreen from "@/screens/auth/RegisterRrScreen";
+import AdminCompaniesListScreen from "@/screens/admin/company/AdminCompaniesListScreen";
+import AdminCompanyDetailScreen from "@/screens/admin/company/AdminCompanyDetailScreen";
+import HrCompanyDetailScreen from "../screens/hr/company/HrCompanyDetailScreen";
+import HrCompanyUpdateScreen from "../screens/hr/company/HrCompanyUpdateScreen";
+import HrJobsListScreen from "../screens/hr/jobs/HrJobsListScreen";
+import HrJobDetailScreen from "../screens/hr/jobs/HrJobDetailScreen";
+import HrJobFormScreen from "../screens/hr/jobs/HrJobFormScreen";
+import { CompanyDetailScreen } from "@/screens";
+import HrApplicationsListScreen from "../screens/hr/jobs/HrApplicationsListScreen";
+import HrApplicationDetailScreen from "../screens/hr/jobs/HrApplicationDetailScreen";
+import { ICompany, IJob, IUser } from '@/types';
 const HrTab = createBottomTabNavigator();
 
 const HrTabs = () => {
   return (
     <HrTab.Navigator
+
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
           switch (route.name) {
-            case 'HrCompany':
-              iconName = focused ? 'business' : 'business-outline';
+            case "HrCompany":
+              iconName = focused ? "business" : "business-outline";
               break;
-            case 'Notifications':
-              return <NotificationTabIcon color={color} size={size} focused={focused} />;
-            case 'Profile':
-              iconName = focused ? 'person' : 'person-outline';
+            case "Notifications":
+              return (
+                <NotificationTabIcon
+                  color={color}
+                  size={size}
+                  focused={focused}
+                />
+              );
+            case "Profile":
+              iconName = focused ? "person" : "person-outline";
               break;
-            case 'HrJobs':
-              iconName = focused ? 'briefcase' : 'briefcase-outline';
+            case "HrJobs":
+              iconName = focused ? "briefcase" : "briefcase-outline";
               break;
+ 
             default:
-              iconName = 'help-outline';
+              iconName = "help-outline";
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -82,10 +96,26 @@ const HrTabs = () => {
         headerShown: false,
       })}
     >
-      <HrTab.Screen name="HrCompany" component={HrCompanyDetailScreen} options={{ tabBarLabel: 'Công ty' }} />
-      <HrTab.Screen name="HrJobs" component={HrJobsListScreen} options={{ tabBarLabel: 'Việc làm' }} />
-      <HrTab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: 'Thông báo' }} />
-      <HrTab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Tài khoản' }} />
+      <HrTab.Screen
+        name="HrCompany"
+        component={HrCompanyDetailScreen}
+        options={{ tabBarLabel: "Công ty" }}
+      />
+      <HrTab.Screen
+        name="HrJobs"
+        component={HrJobsListScreen}
+        options={{ tabBarLabel: "Việc làm" }}
+      />
+      <HrTab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarLabel: "Thông báo" }}
+      />
+      <HrTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarLabel: "Tài khoản" }}
+      />
     </HrTab.Navigator>
   );
 };
@@ -114,6 +144,15 @@ export type RootStackParamList = {
   UsersList: undefined;
   UserDetail: { userId: string };
   UserForm: { userId?: string };
+  HrApplicationsList: { jobId: string };
+  HrApplicationDetail: { applicationId: string };
+  InterviewInvite: {
+    user: IUser | undefined;
+    job: IJob | undefined;
+    company: ICompany | undefined;
+    email: string;
+  };
+  
 };
 
 export type MainTabParamList = {
@@ -145,10 +184,18 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
-
-const NotificationTabIcon = ({ color, size, focused }: { color: string; size: number; focused: boolean }) => {
+const NotificationTabIcon = ({
+  color,
+  size,
+  focused,
+}: {
+  color: string;
+  size: number;
+  focused: boolean;
+}) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const isFocused = useIsFocused();
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
 
   const fetchUnread = async () => {
     try {
@@ -165,27 +212,48 @@ const NotificationTabIcon = ({ color, size, focused }: { color: string; size: nu
     if (isFocused) fetchUnread();
   }, [isFocused]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !user?._id) return;
+    const socket = connectNotificationSocket(user._id);
+    if (socket) {
+      socket.on('notification', () => {
+        fetchUnread();
+      });
+    }
+    return () => {
+      if (socket) socket.off('notification');
+      disconnectNotificationSocket();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id]);
+
   return (
-    <View style={{ position: 'relative' }}>
-      <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={size} color={color} />
+    <View style={{ position: "relative" }}>
+      <Ionicons
+        name={focused ? "notifications" : "notifications-outline"}
+        size={size}
+        color={color}
+      />
       {unreadCount > 0 && (
-        <View style={{
-          position: 'absolute',
-          top: -2,
-          right: -8,
-          backgroundColor: '#ef4444',
-          borderRadius: 10,
-          minWidth: 18,
-          height: 18,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 4,
-          borderWidth: 2,
-          borderColor: '#fff',
-          zIndex: 10,
-        }}>
-          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-            {unreadCount > 99 ? '99+' : unreadCount}
+        <View
+          style={{
+            position: "absolute",
+            top: -2,
+            right: -8,
+            backgroundColor: "#ef4444",
+            borderRadius: 10,
+            minWidth: 18,
+            height: 18,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 4,
+            borderWidth: 2,
+            borderColor: "#fff",
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 12, fontWeight: "bold" }}>
+            {unreadCount > 99 ? "99+" : unreadCount}
           </Text>
         </View>
       )}
@@ -198,24 +266,26 @@ const MainTabs = () => (
     screenOptions={({ route }) => ({
       tabBarIcon: ({ focused, color, size }) => {
         let iconName: keyof typeof Ionicons.glyphMap;
-        if (route.name === 'Notifications') {
-          return <NotificationTabIcon color={color} size={size} focused={focused} />;
+        if (route.name === "Notifications") {
+          return (
+            <NotificationTabIcon color={color} size={size} focused={focused} />
+          );
         }
         switch (route.name) {
-          case 'Home':
-            iconName = focused ? 'home' : 'home-outline';
+          case "Home":
+            iconName = focused ? "home" : "home-outline";
             break;
-          case 'Jobs':
-            iconName = focused ? 'briefcase' : 'briefcase-outline';
+          case "Jobs":
+            iconName = focused ? "briefcase" : "briefcase-outline";
             break;
-          case 'Companies':
-            iconName = focused ? 'business' : 'business-outline';
+          case "Companies":
+            iconName = focused ? "business" : "business-outline";
             break;
-          case 'Profile':
-            iconName = focused ? 'person' : 'person-outline';
+          case "Profile":
+            iconName = focused ? "person" : "person-outline";
             break;
           default:
-            iconName = 'help-outline';
+            iconName = "help-outline";
         }
         return <Ionicons name={iconName} size={size} color={color} />;
       },
@@ -232,16 +302,35 @@ const MainTabs = () => (
       headerShown: false,
     })}
   >
-    <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
-    <Tab.Screen name="Jobs" component={JobsScreen} options={{ tabBarLabel: 'Việc làm' }} />
-    <Tab.Screen name="Companies" component={CompaniesScreen} options={{ tabBarLabel: 'Công ty' }} />
-    <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: 'Thông báo' }} />
-    <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Tài khoản' }} />
+    <Tab.Screen
+      name="Home"
+      component={HomeScreen}
+      options={{ tabBarLabel: "Trang chủ" }}
+    />
+    <Tab.Screen
+      name="Jobs"
+      component={JobsScreen}
+      options={{ tabBarLabel: "Việc làm" }}
+    />
+    <Tab.Screen
+      name="Companies"
+      component={CompaniesScreen}
+      options={{ tabBarLabel: "Công ty" }}
+    />
+    <Tab.Screen
+      name="Notifications"
+      component={NotificationsScreen}
+      options={{ tabBarLabel: "Thông báo" }}
+    />
+    <Tab.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={{ tabBarLabel: "Tài khoản" }}
+    />
   </Tab.Navigator>
 );
 
 const AdminTab = createBottomTabNavigator<AdminTabParamList>();
-
 
 const AdminTabs = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -250,27 +339,33 @@ const AdminTabs = () => {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
-          if (route.name === 'Notifications') {
-            return <NotificationTabIcon color={color} size={size} focused={focused} />;
+          if (route.name === "Notifications") {
+            return (
+              <NotificationTabIcon
+                color={color}
+                size={size}
+                focused={focused}
+              />
+            );
           }
           switch (route.name) {
-            case 'Stats':
-              iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+            case "Stats":
+              iconName = focused ? "stats-chart" : "stats-chart-outline";
               break;
-            case 'Users':
-              iconName = focused ? 'people' : 'people-outline';
+            case "Users":
+              iconName = focused ? "people" : "people-outline";
               break;
-            case 'Companies':
-              iconName = focused ? 'business' : 'business-outline';
+            case "Companies":
+              iconName = focused ? "business" : "business-outline";
               break;
-            case 'Jobs':
-              iconName = focused ? 'briefcase' : 'briefcase-outline';
+            case "Jobs":
+              iconName = focused ? "briefcase" : "briefcase-outline";
               break;
-            case 'Profile':
-              iconName = focused ? 'person' : 'person-outline';
+            case "Profile":
+              iconName = focused ? "person" : "person-outline";
               break;
             default:
-              iconName = 'help-outline';
+              iconName = "help-outline";
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -288,21 +383,39 @@ const AdminTabs = () => {
       })}
     >
       {/* <AdminTab.Screen name="Stats" component={HomeScreen} options={{ tabBarLabel: 'Thống kê' }} /> */}
-      {user?.role === 'ADMIN' && (
-        <>
-          <AdminTab.Screen name="Users" component={UsersListScreen} options={{ tabBarLabel: 'Người dùng' }} />
-          <AdminTab.Screen name="Companies" component={CompaniesListScreen} options={{ tabBarLabel: 'Công ty' }} />
-        </>
-      )}
+
+      <>
+        <AdminTab.Screen
+          name="Users"
+          component={UsersListScreen}
+          options={{ tabBarLabel: "Người dùng" }}
+        />
+        <AdminTab.Screen
+          name="Companies"
+          component={AdminCompaniesListScreen}
+          options={{ tabBarLabel: "Công ty" }}
+        />
+      </>
+
       {/* <AdminTab.Screen name="Jobs" component={JobsScreen} options={{ tabBarLabel: 'Tin tuyển dụng' }} /> */}
-      <AdminTab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: 'Thông báo' }} />
-      <AdminTab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Tài khoản' }} />
+      <AdminTab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarLabel: "Thông báo" }}
+      />
+      <AdminTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarLabel: "Tài khoản" }}
+      />
     </AdminTab.Navigator>
   );
 };
 
 const AppNavigator = () => {
-  const { isAuthenticated, isLoading, user } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, isLoading, user } = useAppSelector(
+    (state) => state.auth,
+  );
   const role = user?.role;
 
   if (isLoading) {
@@ -314,105 +427,134 @@ const AppNavigator = () => {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" component={AuthStack} />
-        ) : role == 'USER' ? (
+        ) : role == "USER" ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen
               name="JobDetail"
               component={JobDetailScreen}
-              options={{ headerShown: true, title: 'Chi tiết việc làm' }}
+              options={{ headerShown: true, title: "Chi tiết việc làm" }}
             />
             <Stack.Screen
               name="CompanyDetail"
               component={CompanyDetailScreen}
-              options={{ headerShown: true, title: 'Chi tiết công ty' }}
+              options={{ headerShown: true, title: "Chi tiết công ty" }}
             />
             <Stack.Screen
               name="ApplicationDetail"
               component={ApplicationDetailScreen}
-              options={{ headerShown: true, title: 'Chi tiết ứng tuyển' }}
+              options={{ headerShown: true, title: "Chi tiết ứng tuyển" }}
             />
             <Stack.Screen
               name="EditProfile"
               component={EditProfileScreen}
-              options={{ headerShown: true, title: 'Chỉnh sửa hồ sơ' }}
+              options={{ headerShown: true, title: "Chỉnh sửa hồ sơ" }}
             />
             <Stack.Screen
               name="MyCVs"
               component={MyCVsScreen}
-              options={{ headerShown: true, title: 'Quản lý CV' }}
+              options={{ headerShown: true, title: "Quản lý CV" }}
             />
             <Stack.Screen
               name="MyApplications"
               component={MyApplicationsScreen}
-              options={{ headerShown: true, title: 'Hồ sơ ứng tuyển' }}
+              options={{ headerShown: true, title: "Hồ sơ ứng tuyển" }}
             />
             <Stack.Screen
               name="ChangePassword"
               component={ChangePasswordScreen}
-              options={{ headerShown: true, title: 'Đổi mật khẩu' }}
+              options={{ headerShown: true, title: "Đổi mật khẩu" }}
             />
+            
           </>
-        ) : role == 'HR' ? (
+        ) : role == "HR" ? (
           <>
             <Stack.Screen name="Main" component={HrTabs} />
             <Stack.Screen
               name="HrCompanyUpdate"
               component={HrCompanyUpdateScreen}
-              options={{ headerShown: true, title: 'Cập nhật công ty' }}
+              options={{ headerShown: true, title: "Cập nhật công ty" }}
             />
             <Stack.Screen
               name="HrJobDetail"
               component={HrJobDetailScreen}
-              options={{ headerShown: true, title: 'Chi tiết công việc' }}
+              options={{ headerShown: true, title: "Chi tiết công việc" }}
             />
             <Stack.Screen
               name="HrJobForm"
               component={HrJobFormScreen}
-              options={{ headerShown: true, title: 'Tạo / Cập nhật công việc' }}
+              options={{ headerShown: true, title: "Tạo / Cập nhật công việc" }}
+            />
+            <Stack.Screen
+              name="HrApplicationsList"
+              component={HrApplicationsListScreen}
+              options={{ headerShown: true, title: "Danh sách ứng viên" }}
+            />
+            <Stack.Screen
+              name="HrApplicationDetail"
+              component={HrApplicationDetailScreen}
+              options={{ headerShown: true, title: "Thông tin ứng viên" }}
+            />
+            <Stack.Screen
+              name="InterviewInvite"
+              component={InterviewInviteScreen}
+              options={{ headerShown: true, title: "Gửi thư mời phỏng vấn" }}
+            />
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={{ headerShown: true, title: "Chỉnh sửa hồ sơ" }}
+            />
+            <Stack.Screen
+              name="ChangePassword"
+              component={ChangePasswordScreen}
+              options={{ headerShown: true, title: "Đổi mật khẩu" }}
             />
           </>
         ) : (
           <>
             <Stack.Screen name="Main" component={AdminTabs} />
-            
-            {role == "ADMIN" && <Stack.Screen
+
+            <Stack.Screen
               name="ManageUser"
               component={UsersListScreen}
-              options={{ headerShown: true, title: 'Quản lý người dùng' }}
-            />}
-            {role == "ADMIN" && <Stack.Screen
+              options={{ headerShown: true, title: "Quản lý người dùng" }}
+            />
+            <Stack.Screen
               name="ManageCompany"
-              component={CompaniesListScreen}
-              options={{ headerShown: true, title: 'Quản lý công ty' }}
-            />}
+              component={AdminCompaniesListScreen}
+              options={{ headerShown: true, title: "Quản lý công ty" }}
+            />
             <Stack.Screen
               name="CompanyDetail"
-              component={CompanyDetailScreen}
-              options={{ headerShown: true, title: 'Chi tiết công ty' }}
+              component={AdminCompanyDetailScreen}
+              options={{ headerShown: true, title: "Chi tiết công ty" }}
             />
             <Stack.Screen
               name="UserForm"
               component={UserFormScreen}
               options={({ route }) => ({
                 headerShown: true,
-                title: route?.params && (route.params as any).userId ? 'Cập nhật người dùng' : 'Tạo người dùng',
+                title:
+                  route?.params && (route.params as any).userId
+                    ? "Cập nhật người dùng"
+                    : "Tạo người dùng",
               })}
             />
             <Stack.Screen
               name="UserDetail"
               component={UserDetailScreen}
-              options={{ headerShown: true, title: 'Cập nhật người dùng' }}
+              options={{ headerShown: true, title: "Cập nhật người dùng" }}
             />
             <Stack.Screen
               name="EditProfile"
               component={EditProfileScreen}
-              options={{ headerShown: true, title: 'Chỉnh sửa hồ sơ' }}
+              options={{ headerShown: true, title: "Chỉnh sửa hồ sơ" }}
             />
             <Stack.Screen
               name="ChangePassword"
               component={ChangePasswordScreen}
-              options={{ headerShown: true, title: 'Đổi mật khẩu' }}
+              options={{ headerShown: true, title: "Đổi mật khẩu" }}
             />
           </>
         )}

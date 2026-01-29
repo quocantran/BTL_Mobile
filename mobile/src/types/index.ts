@@ -73,7 +73,7 @@ export interface IApplication {
   _id: string;
   cv?: IUserCV | string;
   cvId?: IUserCV | string;
-  user?: IUser | string;
+  user: IUser;
   userId?: IUser | string;
   company?: ICompany | string;
   companyId?: ICompany | string;

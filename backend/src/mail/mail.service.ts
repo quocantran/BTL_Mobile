@@ -37,6 +37,14 @@ export class MailService {
     });
   }
 
+  async sendInterviewInvite(email: string, subject: string, content: string) {
+    await this.mailerService.sendMail({
+      to: email,
+      subject: subject || 'Thư mời phỏng vấn',
+      html: content,
+    });
+  }
+
   async sendWelcome(email: string, name: string) {
     await this.mailerService.sendMail({
       to: email,

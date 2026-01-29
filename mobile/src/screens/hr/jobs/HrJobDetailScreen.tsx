@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, useWindowDimensions } from 'react-native';
+import RenderHTML from 'react-native-render-html';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../../constants';
 import { jobService } from '../../../services/jobService';
@@ -7,6 +8,7 @@ import { NativeStackNavigationProp } from 'node_modules/@react-navigation/native
 
 type HrStackParamList = {
     HrJobDetail: { job: any };
+    HrApplicationsList: { jobId: string };
 };
 
 const HrJobDetailScreen: React.FC = () => {
@@ -14,6 +16,7 @@ const HrJobDetailScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<HrStackParamList, 'HrJobDetail'>>();
   const job = (route.params as any)?.job;
   const [localJob, setLocalJob] = useState(job);
+  const { width } = useWindowDimensions();
 
   const load = async () => {
     if (!job?._id) return;
@@ -63,7 +66,14 @@ const HrJobDetailScreen: React.FC = () => {
 
         <View style={{ marginTop: 12 }}>
           <Text style={styles.sectionTitle}>Mô tả</Text>
-          <Text>{displayJob.description || 'Không có mô tả'}</Text>
+          {displayJob.description ? (
+            <RenderHTML
+              contentWidth={width - 32}
+              source={{ html: displayJob.description }}
+            />
+          ) : (
+            <Text>Không có mô tả</Text>
+          )}
         </View>
       </View>
 
@@ -74,7 +84,7 @@ const HrJobDetailScreen: React.FC = () => {
         <TouchableOpacity style={[styles.btn, { backgroundColor: '#ef4444' }]} onPress={handleDelete}>
           <Text style={{ color: '#fff', fontWeight: '700' }}>Xóa</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, { backgroundColor: COLORS.gray[200] }]} onPress={() => {/* xem ứng viên - implement later */}}>
+        <TouchableOpacity style={[styles.btn, { backgroundColor: COLORS.gray[200] }]} onPress={() => navigation.navigate('HrApplicationsList', { jobId: job._id })}>
           <Text style={{ fontWeight: '700' }}>Ứng viên</Text>
         </TouchableOpacity>
       </View>

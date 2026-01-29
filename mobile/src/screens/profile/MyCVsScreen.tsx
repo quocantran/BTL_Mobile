@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ImageViewing from 'react-native-image-viewing';
 import {
   View,
   Text,
@@ -28,6 +29,8 @@ type MyCVsScreenProps = {
 
 const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
   const [cvs, setCvs] = useState<IUserCV[]>([]);
+  const [cvPreviewVisible, setCvPreviewVisible] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -239,7 +242,10 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
   };
 
   const handleViewCV = (cv: IUserCV) => {
-    if (cv.url) {
+    if (cv.url && (cv.url.endsWith('.jpg') || cv.url.endsWith('.jpeg') || cv.url.endsWith('.png') || cv.url.endsWith('.webp'))) {
+      setCvPreviewUrl(cv.url);
+      setCvPreviewVisible(true);
+    } else if (cv.url) {
       Linking.openURL(cv.url);
     }
   };
@@ -249,100 +255,111 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>CV của tôi</Text>
-        <TouchableOpacity
-          style={styles.uploadButton}
-          onPress={handleUploadCV}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <>
-              <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} />
-              <Text style={styles.uploadButtonText}>Tải lên</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
+    <>
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>CV của tôi</Text>
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={handleUploadCV}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} />
+                <Text style={styles.uploadButtonText}>Tải lên</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
-      {/* Info */}
-      <View style={styles.infoContainer}>
-        <Ionicons name="information-circle-outline" size={20} color={COLORS.info} />
-        <Text style={styles.infoText}>
-          Chọn một CV làm CV chính. CV này sẽ được tự động chọn khi bạn ứng tuyển.
-        </Text>
-      </View>
+        {/* Info */}
+        <View style={styles.infoContainer}>
+          <Ionicons name="information-circle-outline" size={20} color={COLORS.info} />
+          <Text style={styles.infoText}>
+            Chọn một CV làm CV chính. CV này sẽ được tự động chọn khi bạn ứng tuyển.
+          </Text>
+        </View>
 
-      {/* Name input modal (cross-platform) */}
-      <Modal visible={showNameModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Đặt tên CV</Text>
+        {/* Name input modal (cross-platform) */}
+        <Modal visible={showNameModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Đặt tên CV</Text>
 
-            <Input placeholder="Tên CV" value={cvName} onChangeText={setCvName} />
+              <Input placeholder="Tên CV" value={cvName} onChangeText={setCvName} />
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancel]}
-                onPress={() => {
-                  setShowNameModal(false);
-                  setPickedFile(null);
-                }}
-                disabled={uploading}
-              >
-                <Text style={styles.modalButtonText}>Hủy</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancel]}
+                  onPress={() => {
+                    setShowNameModal(false);
+                    setPickedFile(null);
+                  }}
+                  disabled={uploading}
+                >
+                  <Text style={styles.modalButtonText}>Hủy</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirm, uploading && styles.modalButtonDisabled]}
-                onPress={handleConfirmUpload}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator size="small" color={COLORS.white} />
-                    <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>Đang tải...</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Xác nhận</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalConfirm, uploading && styles.modalButtonDisabled]}
+                  onPress={handleConfirmUpload}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                      <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>Đang tải...</Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Xác nhận</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* CV List */}
-      {cvs.length === 0 ? (
-        <EmptyState
-          icon="document-text-outline"
-          title="Chưa có CV nào"
-          message="Tải lên CV của bạn để bắt đầu ứng tuyển"
-          actionLabel="Tải lên CV"
-          onAction={handleUploadCV}
-        />
-      ) : (
-        <FlatList
-          data={cvs}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <CVCard
-              cv={item}
-              onPress={() => handleViewCV(item)}
-              onSetPrimary={() => handleSetPrimary(item._id)}
-              onDelete={() => handleDeleteCV(item)}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        {/* CV List */}
+        {cvs.length === 0 ? (
+          <EmptyState
+            icon="document-text-outline"
+            title="Chưa có CV nào"
+            message="Tải lên CV của bạn để bắt đầu ứng tuyển"
+            actionLabel="Tải lên CV"
+            onAction={handleUploadCV}
+          />
+        ) : (
+          <FlatList
+            data={cvs}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item }) => (
+              <CVCard
+                cv={item}
+                onPress={() => handleViewCV(item)}
+                onSetPrimary={() => handleSetPrimary(item._id)}
+                onDelete={() => handleDeleteCV(item)}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          />
+        )}
+      </SafeAreaView>
+      {cvPreviewUrl && (
+        <ImageViewing
+          images={[{ uri: cvPreviewUrl }]}
+          imageIndex={0}
+          visible={cvPreviewVisible}
+          onRequestClose={() => setCvPreviewVisible(false)}
+          presentationStyle="fullScreen"
         />
       )}
-    </SafeAreaView>
+    </>
   );
 };
 

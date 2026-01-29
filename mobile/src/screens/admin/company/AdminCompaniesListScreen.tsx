@@ -14,7 +14,7 @@ type AdminStackParamList = {
   CompanyDetail: { companyId: string };
 };
 
-const CompaniesListScreen: React.FC = () => {
+const AdminCompaniesListScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<AdminStackParamList>>();
   const [companies, setCompanies] = useState<ICompany[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,4 +109,4 @@ const styles = StyleSheet.create({
   date: { color: COLORS.gray[600], marginTop: 4 },
 });
 
-export default CompaniesListScreen;
+export default AdminCompaniesListScreen;

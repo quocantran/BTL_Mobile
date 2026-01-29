@@ -169,8 +169,10 @@ export class CompaniesService {
       (item) => item.toString() === user._id.toString(),
     );
 
-    if (userFollow)
+    if (userFollow){
       throw new BadRequestException('User already follow company');
+    }
+    
 
     await this.companyModel
       .findByIdAndUpdate(
@@ -179,6 +181,17 @@ export class CompaniesService {
         { new: true },
       )
       .exec();
+
+    //send notification to hr when user follow company
+    const hrInCompany = await this.usersService.findByCompanyId(companyId);
+    const notiObj = {
+      userId: hrInCompany._id.toString(),
+      title: 'Công ty của bạn có người theo dõi mới',
+      content: `Người dùng ${user.name} đã theo dõi công ty của bạn.`,
+      type: NotificationType.COMPANY,
+      data: { companyId },
+    };
+    this.notificationService.create(notiObj as CreateNotificationDto);
 
     return user._id;
   }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ImageViewing from 'react-native-image-viewing';
 import {
   View,
   Text,
@@ -65,10 +66,15 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
     }
   };
 
+  const [cvPreviewVisible, setCvPreviewVisible] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const handleViewCV = () => {
     const cvData = application?.cvId || application?.cv;
     const cv = typeof cvData === 'object' ? cvData : null;
-    if (cv?.url) {
+    if (cv?.url && (cv.url.endsWith('.jpg') || cv.url.endsWith('.jpeg') || cv.url.endsWith('.png') || cv.url.endsWith('.webp'))) {
+      setCvPreviewUrl(cv.url);
+      setCvPreviewVisible(true);
+    } else if (cv?.url) {
       Linking.openURL(cv.url);
     } else {
       Alert.alert('Thông báo', 'Không thể xem CV');
@@ -148,6 +154,15 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
             <Ionicons name="open-outline" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
+        {cvPreviewUrl && (
+          <ImageViewing
+            images={[{ uri: cvPreviewUrl }]}
+            imageIndex={0}
+            visible={cvPreviewVisible}
+            onRequestClose={() => setCvPreviewVisible(false)}
+            presentationStyle="fullScreen"
+          />
+        )}
 
         {/* Timeline */}
         <View style={styles.section}>

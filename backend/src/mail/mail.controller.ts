@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Body } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
@@ -17,5 +17,15 @@ export class MailController {
   async sendJobNotification() {
     await this.mailService.sendJobNotification();
     return { message: 'Job notification sent successfully' };
+  }
+
+  @Post('/send-interview-invite')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  @ResponseMessage('Send interview invite email')
+  async sendInterviewInvite(@Body() body: { email: string; subject: string; content: string }) {
+    // Gửi mail async, trả về response ngay
+    this.mailService.sendInterviewInvite(body.email, body.subject, body.content);
+    return { message: 'Interview invite is being sent' };
   }
 }

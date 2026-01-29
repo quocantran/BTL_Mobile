@@ -14,6 +14,8 @@ import { UsersService } from 'src/users/users.service';
 import { UserCVsService } from 'src/usercvs/usercvs.service';
 import { Role } from 'src/decorator/customize';
 import aqp from 'api-query-params';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationType } from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class ApplicationsService {
@@ -22,6 +24,7 @@ export class ApplicationsService {
     private readonly applicationModel: SoftDeleteModel<ApplicationDocument>,
     private readonly usersService: UsersService,
     private readonly userCVsService: UserCVsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // User applies for a job with selected CV
@@ -39,6 +42,7 @@ export class ApplicationsService {
       userId: user._id,
       jobId,
       isDeleted: false,
+      status: { $ne: ApplicationStatus.REJECTED },
     });
 
     if (existingApplication) {
@@ -67,6 +71,34 @@ export class ApplicationsService {
         email: user.email,
       },
     });
+
+    const applicationInDb = (await this.applicationModel.findById(application._id)).populate([
+      {
+        path: 'jobId',
+        select: 'name',
+      },
+      {
+        path: 'companyId',
+        select: 'name',
+      },
+      {
+        path: 'userId',
+        select: 'name',
+      }
+    ]) as any;
+    const hr = await this.usersService.findByCompanyId(applicationInDb.companyId._id.toString());
+
+    const notiObj = {
+      userId: hr._id.toString(),
+      title: 'Đơn ứng tuyển mới',
+      content: `Bạn có một đơn ứng tuyển mới cho công việc ${applicationInDb.jobId.name} từ ứng viên ${applicationInDb.userId.name}.`,
+      type: NotificationType.SYSTEM,
+      data: { applicationId: application._id.toString() },
+
+    }
+
+    this.notificationsService.create(notiObj);
+
 
     return {
       _id: application._id,
@@ -141,7 +173,7 @@ export class ApplicationsService {
       .sort({ createdAt: -1 })
       .populate([
         { path: 'cvId', select: 'url title' },
-        { path: 'userId', select: 'name email avatar phone' },
+        { path: 'userId', select: 'name email address gender' },
       ]);
 
     return {
@@ -204,7 +236,7 @@ export class ApplicationsService {
     const application = await this.applicationModel.findOne({
       _id: id,
       isDeleted: false,
-    });
+    }).populate("jobId companyId") as any;
 
     if (!application) {
       throw new NotFoundException('Đơn ứng tuyển không tồn tại');
@@ -218,6 +250,35 @@ export class ApplicationsService {
         email: user.email,
       },
     };
+
+    //send notification to user about status update
+    //userId, title, content, type, data
+
+    let notiObj = {
+      userId: application.userId.toString(),
+      title: '',
+      content: '',
+      type: NotificationType.SYSTEM,
+      data: { applicationId: application._id.toString() },
+    }
+
+    switch (updateDto.status) {
+      case ApplicationStatus.REVIEWING:
+        notiObj.title = 'Đơn ứng tuyển của bạn đang được xem xét';
+        notiObj.content = `Đơn ứng tuyển của bạn cho công việc ${application.jobId.name} tại công ty ${application.companyId.name} đã được chuyển sang trạng thái Đang xem xét.`;
+        await this.notificationsService.create(notiObj);
+        break;
+      case ApplicationStatus.APPROVED:
+        notiObj.title = 'Đơn ứng tuyển của bạn đã được chấp thuận';
+        notiObj.content = `Chúc mừng! Đơn ứng tuyển của bạn cho công việc ${application.jobId.name} tại công ty ${application.companyId.name} đã được chấp thuận.`;
+        await this.notificationsService.create(notiObj);
+        break;
+      case ApplicationStatus.REJECTED:
+        notiObj.title = 'Đơn ứng tuyển của bạn đã bị từ chối';
+        notiObj.content = `Rất tiếc! Đơn ứng tuyển của bạn cho công việc ${application.jobId.name} tại công ty ${application.companyId.name} đã bị từ chối.`;
+        await this.notificationsService.create(notiObj);
+        break;
+    }
 
     return await this.applicationModel.findByIdAndUpdate(
       id,

@@ -81,16 +81,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       title: 'Đổi mật khẩu',
       onPress: () => navigation.navigate('ChangePassword'),
     },
-    {
-      icon: 'notifications-outline',
-      title: 'Cài đặt thông báo',
-      onPress: () => Alert.alert('Thông báo', 'Tính năng đang phát triển'),
-    },
-    {
-      icon: 'help-circle-outline',
-      title: 'Trợ giúp & Hỗ trợ',
-      onPress: () => Alert.alert('Thông báo', 'Tính năng đang phát triển'),
-    },
   ];
 
   const thirdSection: MenuItem[] = [

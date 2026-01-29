@@ -12,12 +12,14 @@ import { Job, JobDocument } from './schemas/job.schema';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import aqp from 'api-query-params';
 import { IUser } from 'src/users/users.interface';
-import mongoose from 'mongoose';
+import mongoose, { Mongoose } from 'mongoose';
 import { UsersService } from 'src/users/users.service';
 import { RedisService } from 'src/redis/redis.service';
 import { CompaniesService } from 'src/companies/companies.service';
 import { Company, CompanyDocument } from 'src/companies/schemas/company.schema';
 import { Application, ApplicationDocument } from 'src/applications/schemas/application.schema';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationType } from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class JobsService {
@@ -34,6 +36,8 @@ export class JobsService {
     private readonly applicationModel: SoftDeleteModel<ApplicationDocument>,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
+
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async getAll() {
@@ -65,7 +69,7 @@ export class JobsService {
     delete filter.current;
     delete filter.pageSize;
 
-    filter['company._id'] = userInDb.company._id;
+    filter['company._id'] = new mongoose.Types.ObjectId(companyInDb._id);
 
     const totalRecord = (await this.jobModel.find(filter)).length;
     const limit = qs.pageSize ? parseInt(qs.pageSize) : 10;
@@ -77,11 +81,16 @@ export class JobsService {
       .find(filter)
       .skip(skip)
       .limit(limit)
-      .sort(sort as any);
+      .sort(sort as any)
+      .populate({
+        path: 'skills',
+        select: 'name',
+      })
 
     const jobsWithApplicationsCount = await Promise.all(
       jobs.map(async (job) => {
-        const applications = await this.applicationModel.countDocuments({ 'job._id': job._id });
+        
+        const applications = await this.applicationModel.countDocuments({ 'jobId': job._id });
         return {
           ...job.toObject(),
           applicationsCount: applications,
@@ -130,6 +139,12 @@ export class JobsService {
       throw new BadRequestException('Company is not active');
     }
     
+    createJobDto.company = {
+      _id: new mongoose.Types.ObjectId(company._id),
+      name: company.name,
+      logo: company.logo,
+    };
+    
     const newJob = await this.jobModel.create({
       ...createJobDto,
       createdBy: {
@@ -137,6 +152,15 @@ export class JobsService {
         email: user.email,
       },
     });
+
+    //send notification to all users following the company
+    await this.notificationsService.createBulk(
+      company.usersFollow.map(id => id.toString()),
+      'Công ty ' + company.name + ' vừa đăng tuyển công việc mới',
+      `Công việc ${newJob.name} với mức lương ${newJob.salary} VND đã được đăng tuyển. Hãy nhanh tay ứng tuyển ngay!`,
+      NotificationType.SYSTEM,
+      { jobId: newJob._id.toString() },
+    );
 
     await this.redisService.invalidateJobsCache();
 
@@ -254,6 +278,26 @@ export class JobsService {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Job not found');
+    }
+
+    const company = await this.companyModel.findOne(
+      {
+        _id: updateJobDto.company?._id,
+      }
+    );
+
+    if (!company) {
+      throw new BadRequestException('Company not found');
+    }
+
+    if (!company.isActive) {
+      throw new BadRequestException('Company is not active');
+    }
+
+    updateJobDto.company = {
+      _id: new mongoose.Types.ObjectId(company._id),
+      name: company.name,
+      logo: company.logo,
     }
 
     await this.redisService.invalidateJobsCache();

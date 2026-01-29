@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TextInput, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { RichEditor, RichToolbar } from 'react-native-pell-rich-editor';
 import { useFocusEffect } from '@react-navigation/native';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
@@ -30,6 +31,7 @@ const HrJobFormScreen: React.FC = () => {
     location: '',
     isActive: true,
   });
+  const editor = useRef<RichEditor>(null);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -231,8 +233,22 @@ const HrJobFormScreen: React.FC = () => {
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
       <Input label="Tên công việc" placeholder="Nhập tên công việc" value={form.name} onChangeText={(v) => { setForm((p) => ({ ...p, name: v })); setErrors((p) => { const c = { ...p }; delete c.name; return c; }); }} />
       {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
-      <Input label="Mô tả" placeholder="Mô tả công việc" value={form.description} onChangeText={(v) => { setForm((p) => ({ ...p, description: v })); setErrors((p) => { const c = { ...p }; delete c.description; return c; }); }} />
-      {errors.description ? <Text style={styles.errorText}>{errors.description}</Text> : null}
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontWeight: '700', marginBottom: 6 }}>Mô tả công việc</Text>
+        <RichEditor
+          ref={editor}
+          placeholder="Nhập mô tả công việc..."
+          style={styles.richEditor}
+          initialHeight={200}
+          initialContentHTML={form.description}
+          onChange={(html) => {
+            setForm((p) => ({ ...p, description: html }));
+            setErrors((p) => { const c = { ...p }; delete c.description; return c; });
+          }}
+        />
+        <RichToolbar editor={editor} style={styles.richToolbar} />
+        {errors.description ? <Text style={{ color: 'red', marginTop: 4 }}>{errors.description}</Text> : null}
+      </View>
       <View style={{ marginTop: 8 }}>
         <Text style={{ fontWeight: '700', marginBottom: 6 }}>Kỹ năng</Text>
         <TouchableOpacity onPress={() => setSkillModalVisible(true)} style={styles.input}>
@@ -321,6 +337,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   input: { backgroundColor: '#fff', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: COLORS.gray[200] },
   errorText: { color: COLORS.danger, fontSize: 12, marginTop: 6 },
+  richEditor: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: COLORS.gray[200], minHeight: 120, marginBottom: 8 },
+  richToolbar: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: COLORS.gray[200], marginBottom: 8 },
 });
 
 export default HrJobFormScreen;
