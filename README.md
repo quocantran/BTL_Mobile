@@ -21,6 +21,7 @@
 - Nhận thông báo hoặc email khi:
    - Hồ sơ ứng tuyển được cập nhật trạng thái (HR duyệt, từ chối...)
    - Có phản hồi/phỏng vấn từ HR
+   - Công ty đang theo dõi tạo tin tuyển dụng mới
 
 ### 2. Nhà tuyển dụng (HR)
 - Đăng nhập với vai trò HR
