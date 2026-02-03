@@ -208,7 +208,6 @@ npm run android
 # Hoặc chạy trên iOS
 npm run ios
 ```
-
 ### Database
 - Khởi tạo dữ liệu mẫu: `/backend/environment/mongodb/nestjs-backend`
 
