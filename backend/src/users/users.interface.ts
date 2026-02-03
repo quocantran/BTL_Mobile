@@ -10,5 +10,6 @@ export interface IUser {
     _id: string;
     name: string;
     isActive: boolean;
-  }
+  },
+  avatar?: string;
 }

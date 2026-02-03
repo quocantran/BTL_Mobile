@@ -1,10 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument } from 'mongoose';
+import { User } from 'src/users/schemas/user.schema';
 
 export type SubscriberDocument = HydratedDocument<Subscriber>;
 
 @Schema({ timestamps: true })
 export class Subscriber {
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
+  userId: mongoose.Schema.Types.ObjectId;
+
   @Prop({ required: true })
   email: string;
 
@@ -13,6 +17,10 @@ export class Subscriber {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  // Track last email sent to avoid spam
+  @Prop()
+  lastEmailSentAt: Date;
 
   @Prop()
   updatedAt: Date;
@@ -46,3 +54,8 @@ export class Subscriber {
 }
 
 export const SubscriberSchema = SchemaFactory.createForClass(Subscriber);
+
+// Index for efficient queries
+SubscriberSchema.index({ email: 1 }, { unique: true });
+SubscriberSchema.index({ userId: 1 });
+SubscriberSchema.index({ isActive: 1, isDeleted: 1 });

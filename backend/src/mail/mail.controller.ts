@@ -10,14 +10,6 @@ import { RolesGuard } from 'src/guards/roles.guard';
 export class MailController {
   constructor(private readonly mailService: MailService) {}
 
-  @Get('send-job-notification')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @ResponseMessage('Send job notification')
-  async sendJobNotification() {
-    await this.mailService.sendJobNotification();
-    return { message: 'Job notification sent successfully' };
-  }
 
   @Post('/send-interview-invite')
   @UseGuards(JwtAuthGuard, RolesGuard)

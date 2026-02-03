@@ -80,7 +80,10 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
     @User() user: IUser,
   ) {
-    return this.usersService.update(user._id, updateUserDto, user);
+    // Admin có thể update bất kỳ user nào
+    // User thường chỉ có thể update chính mình
+    const targetId = user.role === Role.ADMIN ? id : user._id;
+    return this.usersService.update(targetId, updateUserDto, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -107,5 +110,40 @@ export class UsersController {
   @Get('/record/count')
   countUser() {
     return this.usersService.countUser();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
+  @ApiOperation({ summary: 'Search HRs by name (Admin/HR only)' })
+  @ApiBearerAuth()
+  @ApiQuery({ name: 'name', required: false, description: 'Search by name' })
+  @ApiQuery({ name: 'companyId', required: false, description: 'Exclude HRs from other companies' })
+  @Get('/hrs/search')
+  searchHrs(@Query('name') name: string, @Query('companyId') companyId?: string) {
+    return this.usersService.searchHrsByName(name, companyId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
+  @ApiOperation({ summary: 'Add HR to company (Admin/HR only)' })
+  @ApiBearerAuth()
+  @Post('/hrs/add-to-company')
+  addHrToCompany(
+    @Body() body: { hrId: string; companyId: string; companyName: string },
+    @User() user: IUser,
+  ) {
+    return this.usersService.addHrToCompany(body.hrId, body.companyId, body.companyName);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
+  @ApiOperation({ summary: 'Remove HR from company (Admin/HR only)' })
+  @ApiBearerAuth()
+  @Post('/hrs/remove-from-company')
+  removeHrFromCompany(
+    @Body() body: { hrId: string; companyId: string },
+    @User() user: IUser,
+  ) {
+    return this.usersService.removeHrFromCompany(body.hrId, body.companyId);
   }
 }

@@ -8,3 +8,4 @@ export * from './commentService';
 export * from './userService';
 export * from './notificationService';
 export * from './skillService';
+export * from './subscriberService';

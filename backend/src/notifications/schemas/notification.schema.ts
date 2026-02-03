@@ -9,6 +9,16 @@ export enum NotificationType {
   RESUME = 'RESUME',
   COMPANY = 'COMPANY',
   SYSTEM = 'SYSTEM',
+  APPLICATION = 'APPLICATION',
+}
+
+// Target types for navigation
+export enum NotificationTargetType {
+  JOB = 'job',
+  COMPANY = 'company',
+  APPLICATION = 'application',
+  USER = 'user',
+  NONE = 'none',
 }
 
 @Schema({ timestamps: true })
@@ -24,6 +34,14 @@ export class Notification {
 
   @Prop({ type: String, enum: NotificationType, default: NotificationType.SYSTEM })
   type: string;
+
+  // Navigation target type (for mobile navigation)
+  @Prop({ type: String, enum: NotificationTargetType, default: NotificationTargetType.NONE })
+  targetType: string;
+
+  // Target ID for navigation (jobId, companyId, applicationId, etc.)
+  @Prop()
+  targetId: string;
 
   @Prop({ type: Object })
   data: Record<string, any>;
@@ -68,3 +86,4 @@ export class Notification {
 export const NotificationSchema = SchemaFactory.createForClass(Notification);
 
 NotificationSchema.index({ user: 1, isRead: 1, createdAt: -1 });
+NotificationSchema.index({ user: 1, targetType: 1, createdAt: -1 });

@@ -101,7 +101,11 @@ export class UsersService {
   }
 
   async findByCompanyId(companyId: string) {
-    return await this.userModel.findOne({ 'company._id': companyId, isDeleted: false }).select('-password -refreshToken -createdBy -updatedBy -deletedBy');
+    return await this.userModel.findOne({ 'company._id': companyId, isDeleted: false }).select('-password -refreshToken -createdBy -updatedBy -deletedBy _id');
+  }
+
+  async findAllByCompanyId(companyId: string) {
+    return await this.userModel.find({ 'company._id': companyId, isDeleted: false }).select('-password -refreshToken -createdBy -updatedBy -deletedBy');
   }
 
   async findOne(id: string) {
@@ -196,5 +200,77 @@ export class UsersService {
 
   async countUser() {
     return await this.userModel.countDocuments();
+  }
+
+  // Search for HR users by name (only users with HR role that don't belong to any company yet)
+  async searchHrsByName(name: string, excludeCompanyId?: string) {
+    const query: any = {
+      role: Role.HR,
+      isDeleted: false,
+    };
+
+    if (name) {
+      query.name = { $regex: name, $options: 'i' };
+    }
+
+    // Exclude HRs that already belong to a company (unless it's the same company)
+    if (excludeCompanyId) {
+      query.$or = [
+        { company: { $exists: false } },
+        { company: null },
+        { 'company._id': excludeCompanyId },
+      ];
+    } else {
+      query.$or = [
+        { company: { $exists: false } },
+        { company: null },
+      ];
+    }
+
+    const hrs = await this.userModel
+      .find(query)
+      .select('_id name email avatar')
+      .limit(20);
+
+    return hrs;
+  }
+
+  // Add HR to company
+  async addHrToCompany(hrId: string, companyId: string, companyName: string) {
+    const hr = await this.userModel.findOne({ _id: hrId, role: Role.HR, isDeleted: false });
+    if (!hr) {
+      throw new NotFoundException('HR not found or user is not an HR');
+    }
+
+    // Check if HR already belongs to another company
+    if (hr.company && hr.company._id.toString() !== companyId) {
+      throw new BadRequestException('HR đã thuộc về một công ty khác');
+    }
+
+    await this.userModel.updateOne(
+      { _id: hrId },
+      { company: { _id: companyId, name: companyName } },
+    );
+
+    return { message: 'Thêm HR vào công ty thành công' };
+  }
+
+  // Remove HR from company
+  async removeHrFromCompany(hrId: string, companyId: string) {
+    const hr = await this.userModel.findOne({ _id: hrId, role: Role.HR, isDeleted: false });
+    if (!hr) {
+      throw new NotFoundException('HR not found');
+    }
+
+    if (!hr.company || hr.company._id.toString() !== companyId) {
+      throw new BadRequestException('HR không thuộc công ty này');
+    }
+
+    await this.userModel.updateOne(
+      { _id: hrId },
+      { $unset: { company: 1 } },
+    );
+
+    return { message: 'Xóa HR khỏi công ty thành công' };
   }
 }

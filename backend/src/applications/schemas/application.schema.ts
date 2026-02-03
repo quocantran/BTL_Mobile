@@ -98,6 +98,5 @@ export class Application {
 export const ApplicationSchema = SchemaFactory.createForClass(Application);
 
 // Indexes for faster queries
-ApplicationSchema.index({ userId: 1, jobId: 1 }, { unique: true }); // Prevent duplicate applications
 ApplicationSchema.index({ companyId: 1, status: 1 });
 ApplicationSchema.index({ jobId: 1, status: 1 });

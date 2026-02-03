@@ -31,7 +31,8 @@ export interface ICompany {
   jobCount?: number;
   createdAt: string;
   updatedAt: string;
-  hr: IUser;
+  hr?: IUser;
+  hrs?: IUser[];
 }
 
 export interface IJob {
@@ -114,7 +115,10 @@ export interface INotification {
   title: string;
   content: string;
   message: string;
-  type: string;
+  type: 'JOB' | 'RESUME' | 'COMPANY' | 'SYSTEM' | 'APPLICATION';
+  targetType?: 'job' | 'company' | 'application' | 'user' | 'none';
+  targetId?: string;
+  data?: Record<string, any>;
   isRead: boolean;
   createdAt: string;
 }
@@ -177,4 +181,49 @@ export interface ICreateCommentDto {
   content: string;
   rating?: number;
   parentId?: string;
+}
+
+// AI Matching Types
+export interface ICandidateMatchResult {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  candidateEmail: string;
+  candidateAvatar?: string;
+  cvId: string;
+  cvTitle: string;
+  cvUrl: string;
+  matchScore: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  shortExplanation: string;
+  applicationStatus: string;
+  appliedAt: string;
+}
+
+export interface IAIRankingResponse {
+  jobId: string;
+  jobName: string;
+  totalApplications: number;
+  rankedCandidates: ICandidateMatchResult[];
+  processedAt: string;
+}
+
+// Subscriber Types
+export interface ISubscriber {
+  _id: string;
+  userId?: string;
+  email: string;
+  skills: ISkill[];
+  isActive: boolean;
+  lastEmailSentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ICreateSubscriberDto {
+  email: string;
+  skills: string[];
+  newSkillNames?: string[];
+  isActive?: boolean;
 }

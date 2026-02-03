@@ -57,6 +57,19 @@ export class ApplicationsController {
     return this.applicationsService.findByJob(jobId, qs, user);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
+  @Get('by-job/:jobId/ai-rank')
+  @ResponseMessage('Xếp hạng ứng viên bằng AI')
+  getAIRankedCandidates(
+    @Param('jobId') jobId: string,
+    @Query('topN') topN: string,
+    @User() user: IUser,
+  ) {
+    const limit = topN ? parseInt(topN, 10) : 10;
+    return this.applicationsService.getAIRankedCandidates(jobId, limit, user);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ResponseMessage('Lấy chi tiết đơn ứng tuyển')

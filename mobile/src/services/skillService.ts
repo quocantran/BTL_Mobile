@@ -2,7 +2,7 @@ import api from './api';
 import { IApiResponse, IPaginatedResponse, ISkill } from '../types';
 
 export const skillService = {
-  async getSkills(): Promise<IApiResponse<IPaginatedResponse<ISkill[]>>> {
+  async getSkills(): Promise<IApiResponse<IPaginatedResponse<ISkill>>> {
     const response = await api.get('/skills');
     return response.data;
   },

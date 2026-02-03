@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Modal, FlatList } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { usersService } from '../../../services/usersService';
+import { companyService } from '../../../services/companyService';
 import { Loading } from '../../../components/common/Loading';
 import { COLORS } from '../../../constants';
+import { ICompany } from '../../../types';
 
 type RouteParams = {
   params?: {
@@ -24,10 +27,29 @@ const UserFormScreen: React.FC = () => {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [address, setAddress] = useState('');
-
+  
+  // Company selection for HR role
+  const [companies, setCompanies] = useState<ICompany[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<ICompany | null>(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  
   useEffect(() => {
     if (userId) loadUser();
+    loadCompanies();
   }, [userId]);
+
+  const loadCompanies = async () => {
+    setLoadingCompanies(true);
+    try {
+      const res = await companyService.getCompanies({ pageSize: 100 });
+      setCompanies(res.data.result || []);
+    } catch (err) {
+      console.error('Failed to load companies:', err);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
 
   const loadUser = async () => {
     setLoading(true);
@@ -39,6 +61,9 @@ const UserFormScreen: React.FC = () => {
       setAge(u.age?.toString() || '');
       setGender(u.gender || '');
       setAddress(u.address || '');
+      if (u.company && u.company._id) {
+        setSelectedCompany(u.company as unknown as ICompany);
+      }
     } catch (err) {
       Alert.alert('Lỗi', 'Không thể tải thông tin người dùng');
     } finally {
@@ -56,6 +81,10 @@ const UserFormScreen: React.FC = () => {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ');
       return;
     }
+    if (role === 'HR' && !selectedCompany) {
+      Alert.alert('Lỗi', 'Vui lòng chọn công ty cho HR');
+      return;
+    }
     if (!userId && !validateEmail(email)) {
       Alert.alert('Lỗi', 'Email không hợp lệ');
       return;
@@ -66,7 +95,19 @@ const UserFormScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const payload = { name, role, age: parseInt(age, 10), gender, address };
+      const payload: any = { name, role, age: parseInt(age, 10), gender, address };
+      
+      // Add company info for HR role
+      if (role === 'HR' && selectedCompany) {
+        payload.company = {
+          _id: selectedCompany._id,
+          name: selectedCompany.name,
+        };
+      } else if (role !== 'HR') {
+        // Clear company if not HR
+        payload.company = null;
+      }
+      
       if (userId) {
         await usersService.updateUser(userId, payload);
         Alert.alert('Thành công', 'Đã cập nhật');
@@ -84,8 +125,23 @@ const UserFormScreen: React.FC = () => {
 
   if (loading) return <Loading />;
 
+  const renderCompanyItem = ({ item }: { item: ICompany }) => (
+    <TouchableOpacity
+      style={styles.companyItem}
+      onPress={() => {
+        setSelectedCompany(item);
+        setShowCompanyModal(false);
+      }}
+    >
+      <Text style={styles.companyItemText}>{item.name}</Text>
+      {selectedCompany?._id === item._id && (
+        <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+      )}
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.label}>Họ và tên</Text>
       <TextInput style={styles.input} value={name} onChangeText={setName} />
 
@@ -128,10 +184,57 @@ const UserFormScreen: React.FC = () => {
         ))}
       </View>
 
+      {/* Company Selection for HR Role */}
+      {role === 'HR' && (
+        <>
+          <Text style={styles.label}>Công ty <Text style={{ color: COLORS.danger }}>*</Text></Text>
+          <TouchableOpacity
+            style={styles.companySelector}
+            onPress={() => setShowCompanyModal(true)}
+          >
+            <Text style={selectedCompany ? styles.companySelectorText : styles.companySelectorPlaceholder}>
+              {selectedCompany ? selectedCompany.name : 'Chọn công ty...'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.gray[400]} />
+          </TouchableOpacity>
+        </>
+      )}
+
       <TouchableOpacity style={styles.submitBtn} onPress={onSubmit}>
         <Text style={styles.submitText}>{userId ? 'Cập nhật' : 'Tạo'}</Text>
       </TouchableOpacity>
-    </View>
+
+      {/* Company Selection Modal */}
+      <Modal
+        visible={showCompanyModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCompanyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn công ty</Text>
+              <TouchableOpacity onPress={() => setShowCompanyModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.gray[600]} />
+              </TouchableOpacity>
+            </View>
+            {loadingCompanies ? (
+              <Loading />
+            ) : (
+              <FlatList
+                data={companies}
+                keyExtractor={(item) => item._id}
+                renderItem={renderCompanyItem}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>Không có công ty nào</Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 };
 
@@ -143,8 +246,51 @@ const styles = StyleSheet.create({
   roleActive: { backgroundColor: COLORS.primary },
   roleText: { color: COLORS.gray[700] },
   roleTextActive: { color: COLORS.white },
-  submitBtn: { marginTop: 24, backgroundColor: COLORS.primary, padding: 12, borderRadius: 8 },
+  submitBtn: { marginTop: 24, marginBottom: 40, backgroundColor: COLORS.primary, padding: 12, borderRadius: 8 },
   submitText: { color: COLORS.white, textAlign: 'center', fontWeight: '600' },
+  companySelector: {
+    backgroundColor: COLORS.white,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  companySelectorText: { color: COLORS.gray[800], fontSize: 14 },
+  companySelectorPlaceholder: { color: COLORS.gray[400], fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: COLORS.gray[800] },
+  companyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  companyItemText: { fontSize: 14, color: COLORS.gray[700] },
+  emptyText: { padding: 20, textAlign: 'center', color: COLORS.gray[400] },
 });
+
 
 export default UserFormScreen;

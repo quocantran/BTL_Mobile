@@ -8,9 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SIZES } from '../../constants';
 import { Button, Input } from '../../components';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
@@ -31,8 +35,10 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     age: user?.age?.toString() || '',
     gender: user?.gender || '',
     address: user?.address || '',
+    avatar: user?.avatar || '',
   });
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -62,6 +68,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         age: Number(formData.age),
         gender: formData.gender,
         address: formData.address.trim(),
+        avatar: formData.avatar,
       });
       await dispatch(getProfile());
       Alert.alert('Thành công', 'Cập nhật hồ sơ thành công', [
@@ -72,6 +79,127 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     } finally {
       setLoading(false);
     }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Lỗi', 'Cần quyền truy cập thư viện ảnh để chọn ảnh đại diện');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Lỗi', 'Cần quyền truy cập camera để chụp ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    setUploadingAvatar(true);
+    try {
+      // Ensure proper file URI format
+      let fileUri = uri;
+      if (fileUri && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
+        fileUri = 'file://' + fileUri;
+      }
+
+      // Small delay to ensure file is ready
+      const isWeb = typeof window !== 'undefined' && !!(window as any).document;
+      if (!isWeb) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // Create FormData for file upload
+      const uploadForm = new FormData();
+      const filename = uri.split('/').pop() || 'avatar.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const mimeType = match ? `image/${match[1]}` : 'image/jpeg';
+
+      if (isWeb) {
+        const response = await fetch(fileUri);
+        const blobData = await response.blob();
+        const file = new File([blobData], filename, { type: mimeType });
+        uploadForm.append('fileUpload', file);
+      } else {
+        uploadForm.append('fileUpload', {
+          uri: fileUri,
+          type: mimeType,
+          name: filename,
+        } as any);
+      }
+
+      // Retry logic for upload
+      let uploadResp;
+      let lastError;
+      const maxRetries = 2;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          uploadResp = await userService.uploadAvatar(uploadForm);
+          break;
+        } catch (err: any) {
+          lastError = err;
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+
+      if (!uploadResp) {
+        throw lastError || new Error('Upload failed after retries');
+      }
+
+      const uploadedUrl = (uploadResp as any)?.data?.url || (uploadResp as any)?.url || (uploadResp as any)?.data;
+      if (!uploadedUrl) {
+        throw new Error('Không nhận được đường dẫn file từ server');
+      }
+
+      setFormData((prev) => ({ ...prev, avatar: uploadedUrl }));
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      let message = 'Không thể tải lên ảnh';
+      if (typeof error === 'object' && error !== null) {
+        if ('response' in error && typeof (error as any).response?.data?.message === 'string') {
+          message = (error as any).response.data.message;
+        } else if ('message' in error && typeof (error as any).message === 'string') {
+          message = (error as any).message;
+        }
+      }
+      Alert.alert('Lỗi', message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert('Chọn ảnh đại diện', 'Chọn nguồn ảnh', [
+      { text: 'Chụp ảnh', onPress: takePhoto },
+      { text: 'Chọn từ thư viện', onPress: pickImage },
+      { text: 'Hủy', style: 'cancel' },
+    ]);
   };
 
   const updateField = (field: string, value: string) => {
@@ -91,6 +219,27 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={showImageOptions} disabled={uploadingAvatar}>
+              <View style={styles.avatarContainer}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                ) : formData.avatar ? (
+                  <Image source={{ uri: formData.avatar }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons name="person" size={50} color={COLORS.gray[400]} />
+                  </View>
+                )}
+                <View style={styles.editBadge}>
+                  <Ionicons name="camera" size={16} color={COLORS.white} />
+                </View>
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarHint}>Nhấn để thay đổi ảnh đại diện</Text>
+          </View>
+
           <View style={styles.form}>
             <Input
               label="Họ và tên *"
@@ -150,6 +299,51 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     padding: SIZES.padding,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarContainer: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.gray[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.white,
+  },
+  avatarHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.gray[500],
   },
   form: {
     backgroundColor: COLORS.white,

@@ -64,6 +64,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     onPress: () => navigation.navigate('MyApplications'),
   };
 
+  const subscriptionItem: MenuItem = {
+    icon: 'mail-outline',
+    title: 'Đăng ký nhận tin',
+    subtitle: 'Nhận email về việc làm mới',
+    onPress: () => navigation.navigate('JobSubscription'),
+  };
+
   const firstSection: MenuItem[] = [
     {
       icon: 'person-outline',
@@ -71,8 +78,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       subtitle: 'Cập nhật thông tin cá nhân',
       onPress: () => navigation.navigate('EditProfile'),
     },
-    // Only show CV and Applications to plain USER role
-    ...(user?.role === 'USER' ? [cvItem, applicationsItem] : []),
+    // Only show CV, Applications and Subscription to plain USER role
+    ...(user?.role === 'USER' ? [cvItem, applicationsItem, subscriptionItem] : []),
   ];
 
   const secondSection: MenuItem[] = [

@@ -1,5 +1,5 @@
 import api from './api';
-import { IApiResponse, IApplication, IPaginatedResponse } from '../types';
+import { IApiResponse, IApplication, IPaginatedResponse, IAIRankingResponse } from '../types';
 
 export interface ICreateApplicationDto {
   cvId: string;
@@ -52,6 +52,12 @@ export const applicationService = {
 
   async updateApplicationStatus(id: string, status: string): Promise<IApiResponse<IApplication>> {
     const response = await api.patch(`/applications/${id}/status`, { status });
+    return response.data;
+  },
+
+  // AI Ranking - Get top candidates ranked by AI matching
+  async getAIRankedCandidates(jobId: string, topN: number = 10): Promise<IApiResponse<IAIRankingResponse>> {
+    const response = await api.get(`/applications/by-job/${jobId}/ai-rank?topN=${topN}`);
     return response.data;
   },
 };

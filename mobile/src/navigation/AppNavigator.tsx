@@ -31,6 +31,7 @@ import ApplicationDetailScreen from "../screens/detail/ApplicationDetailScreen";
 // Profile Screens
 import EditProfileScreen from "../screens/profile/EditProfileScreen";
 import MyCVsScreen from "../screens/profile/MyCVsScreen";
+import JobSubscriptionScreen from "../screens/profile/JobSubscriptionScreen";
 import MyApplicationsScreen from "../screens/profile/MyApplicationsScreen";
 import ChangePasswordScreen from "../screens/profile/ChangePasswordScreen";
 
@@ -133,6 +134,8 @@ export type RootStackParamList = {
   EditProfile: undefined;
   MyCVs: undefined;
   MyApplications: undefined;
+  JobSubscription: undefined;
+  AdminCompanyDetail: { companyId: string };
   ChangePassword: undefined;
   Admin: undefined;
   Dashboard: undefined;
@@ -465,6 +468,11 @@ const AppNavigator = () => {
               component={ChangePasswordScreen}
               options={{ headerShown: true, title: "Đổi mật khẩu" }}
             />
+            <Stack.Screen
+              name="JobSubscription"
+              component={JobSubscriptionScreen}
+              options={{ headerShown: false }}
+            />
             
           </>
         ) : role == "HR" ? (
@@ -526,7 +534,7 @@ const AppNavigator = () => {
               options={{ headerShown: true, title: "Quản lý công ty" }}
             />
             <Stack.Screen
-              name="CompanyDetail"
+              name="AdminCompanyDetail"
               component={AdminCompanyDetailScreen}
               options={{ headerShown: true, title: "Chi tiết công ty" }}
             />

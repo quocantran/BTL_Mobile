@@ -15,7 +15,7 @@ import { CreateHrDto } from 'src/users/dto/create-hr.dto';
 import { CompaniesService } from 'src/companies/companies.service';
 import { Types } from 'mongoose';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { NotificationType } from 'src/notifications/schemas/notification.schema';
+import { NotificationTargetType, NotificationType } from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class AuthService {
@@ -69,7 +69,7 @@ export class AuthService {
   };
 
   async login(user: IUser, res: Response) {
-    const { _id, name, email, role, age, gender, address } = user;
+    const { _id, name, email, role, age, gender, address, avatar } = user;
 
     const payload = {
       sub: 'token login',
@@ -81,6 +81,7 @@ export class AuthService {
       age,
       gender,
       address,
+      avatar
     };
 
     const refreshToken = this.generateRefreshToken(payload);
@@ -107,6 +108,7 @@ export class AuthService {
       age: user.age,
       gender: user.gender,
       address: user.address,
+      avatar: user.avatar,
     };
 
     if (user.role === Role.HR && user.company) {
@@ -175,6 +177,7 @@ export class AuthService {
         role: isExistEmail.role,
         name: user.firstName + ' ' + user.lastName,
         age: isExistEmail.age,
+        avatar: isExistEmail.avatar,
       };
     }
 
@@ -221,6 +224,7 @@ export class AuthService {
         age: currUser.age,
         address: currUser.address,
         gender: currUser.gender,
+        avatar: currUser.avatar,
       },
     };
   }
@@ -273,7 +277,8 @@ export class AuthService {
             email,
             name,
             role,
-          },
+            avatar: user.avatar,
+          }
         };
       }
     } catch (err) {
@@ -307,6 +312,7 @@ export class AuthService {
       age: createHrDto.age || 0,
       address: createHrDto.address || '',
       gender: createHrDto.gender || '',
+
     });
     const updateUserDto = {
       company: {
@@ -319,7 +325,7 @@ export class AuthService {
       updateUserDto.company,
     );
 
-    // Notify all admins
+    // Notify all admins with navigation target
     const admins = await this.userModel.find({
       role: Role.ADMIN,
       isDeleted: false,
@@ -331,7 +337,9 @@ export class AuthService {
         adminIds,
         'Đăng ký HR mới',
         content,
-        NotificationType.SYSTEM,
+        NotificationType.COMPANY,
+        NotificationTargetType.COMPANY,
+        company._id.toString(), // targetId
         { companyId: company._id.toString() },
       );
     }

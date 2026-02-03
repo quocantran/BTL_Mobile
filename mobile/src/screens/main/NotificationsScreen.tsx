@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   View,
   Text,
@@ -14,13 +15,17 @@ import { COLORS, SIZES } from '../../constants';
 import { Loading, EmptyState } from '../../components';
 import { notificationService } from '../../services/notificationService';
 import { INotification } from '../../types';
+import { useAppSelector } from '../../store/hooks';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 
 const NotificationsScreen: React.FC = () => {
   const [notifications, setNotifications] = useState<INotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user } = useAppSelector((state) => state.auth);
+  const userRole = user?.role;
 
   useEffect(() => {
     loadNotifications();
@@ -43,6 +48,70 @@ const NotificationsScreen: React.FC = () => {
     setRefreshing(true);
     await loadNotifications();
     setRefreshing(false);
+  };
+
+  // Handle notification click - navigate to appropriate screen based on targetType
+  const handleNotificationPress = async (notification: INotification) => {
+    // Mark as read first
+    if (!notification.isRead) {
+      try {
+        await notificationService.markAsRead(notification._id);
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notification._id ? { ...n, isRead: true } : n))
+        );
+      } catch (error) {
+        console.error('Failed to mark as read:', error);
+      }
+    }
+
+    // Navigate based on targetType and user role
+    const { targetType, targetId, data } = notification;
+    
+    if (!targetType || targetType === 'none' || !targetId) {
+      return; // No navigation for system notifications without target
+    }
+
+    // Normalize role to uppercase for comparison
+    const role = userRole?.toUpperCase?.() || userRole;
+    
+    try {
+      switch (targetType) {
+        case 'job':
+          // User role sees JobDetail, HR can see their job detail
+          if (role === 'USER') {
+            navigation.navigate('JobDetail', { jobId: targetId });
+          } else if (role === 'HR' && data?.jobId) {
+            // HR navigates to HrJobDetail with job data
+            navigation.navigate('HrJobDetail', { job: { _id: data.jobId } });
+          }
+          break;
+
+        case 'company':
+          // Admin sees AdminCompanyDetail, User sees CompanyDetail, HR sees their company
+          if (role === 'ADMIN') {
+            navigation.navigate('AdminCompanyDetail', { companyId: targetId });
+          } else if (role === 'USER') {
+            navigation.navigate('CompanyDetail', { companyId: targetId });
+          }
+          // HR doesn't need to navigate to company detail from notification, they can use tab
+          break;
+
+        case 'application':
+          // User sees their application detail, HR sees HrApplicationDetail
+          if (role === 'USER') {
+            navigation.navigate('ApplicationDetail', { applicationId: targetId });
+          } else if (role === 'HR') {
+            navigation.navigate('HrApplicationDetail', { applicationId: targetId });
+          }
+          break;
+
+        default:
+          console.log('Unknown target type:', targetType);
+          break;
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleMarkAsRead = async (id: string, isRead: boolean) => {
@@ -68,11 +137,12 @@ const NotificationsScreen: React.FC = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'application':
+      case 'APPLICATION':
+      case 'RESUME':
         return 'document-text';
-      case 'job':
+      case 'JOB':
         return 'briefcase';
-      case 'company':
+      case 'COMPANY':
         return 'business';
       default:
         return 'notifications';
@@ -82,8 +152,8 @@ const NotificationsScreen: React.FC = () => {
   const renderNotificationItem = ({ item }: { item: INotification }) => (
     <TouchableOpacity
       style={[styles.notificationItem, !item.isRead && styles.unreadItem]}
-      onPress={() => handleMarkAsRead(item._id, item.isRead)}
-      activeOpacity={item.isRead ? 1 : 0.7}
+      onPress={() => handleNotificationPress(item)}
+      activeOpacity={0.7}
     >
       <View style={[styles.iconContainer, !item.isRead && styles.unreadIcon]}>
         <Ionicons

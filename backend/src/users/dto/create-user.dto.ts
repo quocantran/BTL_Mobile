@@ -22,6 +22,9 @@ export class Company {
 
   @IsOptional()
   logo?: string;
+
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class RegisterUserDto {

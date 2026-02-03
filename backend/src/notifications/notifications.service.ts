@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { Notification, NotificationDocument, NotificationType } from './schemas/notification.schema';
+import { Notification, NotificationDocument, NotificationType, NotificationTargetType } from './schemas/notification.schema';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import mongoose from 'mongoose';
 import { IUser } from 'src/users/users.interface';
@@ -16,7 +16,7 @@ export class NotificationsService {
   ) {}
 
   async create(createNotificationDto: CreateNotificationDto) {
-    const { userId, title, content, type, data } = createNotificationDto;
+    const { userId, title, content, type, targetType, targetId, data } = createNotificationDto;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new BadRequestException('User not found');
@@ -27,6 +27,8 @@ export class NotificationsService {
       title,
       content,
       type: type || NotificationType.SYSTEM,
+      targetType: targetType || NotificationTargetType.NONE,
+      targetId: targetId || null,
       data,
     });
 
@@ -41,6 +43,8 @@ export class NotificationsService {
     title: string,
     content: string,
     type: NotificationType = NotificationType.SYSTEM,
+    targetType: NotificationTargetType = NotificationTargetType.NONE,
+    targetId?: string,
     data?: Record<string, any>,
   ) {
     const notifications = userIds.map((userId) => ({
@@ -48,6 +52,8 @@ export class NotificationsService {
       title,
       content,
       type,
+      targetType,
+      targetId: targetId || null,
       data,
     }));
 

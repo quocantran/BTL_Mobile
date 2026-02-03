@@ -31,6 +31,8 @@ export const userService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      transformRequest: (data) => data,
+      timeout: 60000,
     });
     return response.data;
   },

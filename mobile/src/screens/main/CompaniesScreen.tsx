@@ -75,8 +75,7 @@ const CompaniesScreen: React.FC<CompaniesScreenProps> = ({ navigation }) => {
     } else {
       await dispatch(followCompany(company._id));
     }
-    // Reload to get updated follow status
-    loadCompanies(1, searchQuery);
+    // No need to reload - the redux state is updated directly
   };
 
   const renderCompanyItem = useCallback(

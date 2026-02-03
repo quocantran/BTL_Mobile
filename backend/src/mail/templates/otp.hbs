@@ -1,47 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>OTP Verification</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .otp-code {
-      font-size: 32px;
-      font-weight: bold;
-      color: #2563eb;
-      letter-spacing: 8px;
-      text-align: center;
-      padding: 20px;
-      background-color: #f3f4f6;
-      border-radius: 8px;
-      margin: 20px 0;
-    }
-    .footer {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xác thực OTP</title>
 </head>
-<body>
-  <div class="container">
-    <h2>Xác thực OTP</h2>
-    <p>Mã OTP của bạn là:</p>
-    <div class="otp-code">{{otp}}</div>
-    <p>Mã OTP này sẽ hết hạn trong 5 phút.</p>
-    <p>Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email này.</p>
-    <div class="footer">
-      <p>Trân trọng,<br>Đội ngũ hỗ trợ</p>
-    </div>
-  </div>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f7fa; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">🔐 Xác thực OTP</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 15px;">Mã xác thực tài khoản của bạn</p>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">Xin chào,</p>
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 30px;">Bạn đã yêu cầu mã OTP để xác thực. Vui lòng sử dụng mã bên dưới:</p>
+              
+              <!-- OTP Code Box -->
+              <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px dashed #2563eb; border-radius: 12px; padding: 30px; text-align: center; margin-bottom: 30px;">
+                <p style="color: #64748b; font-size: 14px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 1px;">Mã OTP của bạn</p>
+                <div style="font-size: 42px; font-weight: 800; color: #2563eb; letter-spacing: 12px; font-family: 'Courier New', monospace;">{{otp}}</div>
+              </div>
+              
+              <!-- Warning Box -->
+              <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin-bottom: 30px;">
+                <p style="color: #92400e; font-size: 14px; margin: 0;"><strong>⚠️ Lưu ý:</strong> Mã OTP này sẽ hết hạn sau <strong>5 phút</strong>. Không chia sẻ mã này với bất kỳ ai.</p>
+              </div>
+              
+              <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email này.</p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="color: #64748b; font-size: 14px; margin: 0 0 8px;">Trân trọng,</p>
+              <p style="color: #1e293b; font-size: 16px; font-weight: 600; margin: 0;">Đội ngũ hỗ trợ Job Portal</p>
+              <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">© 2026 Job Portal. All rights reserved.</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

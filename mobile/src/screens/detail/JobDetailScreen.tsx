@@ -92,6 +92,7 @@ const JobDetailScreen: React.FC<JobDetailScreenProps> = ({
 
     setApplying(true);
     try {
+      console.log("Applying with CV ID:", job);
       await applicationService.apply({
         jobId: jobId,
         cvId: selectedCV._id,

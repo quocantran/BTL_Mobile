@@ -68,6 +68,8 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
 
   const [cvPreviewVisible, setCvPreviewVisible] = useState(false);
   const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+
   const handleViewCV = () => {
     const cvData = application?.cvId || application?.cv;
     const cv = typeof cvData === 'object' ? cvData : null;
@@ -79,6 +81,39 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
     } else {
       Alert.alert('Thông báo', 'Không thể xem CV');
     }
+  };
+
+  const handleWithdrawApplication = () => {
+    Alert.alert(
+      'Xác nhận rút đơn',
+      'Bạn có chắc chắn muốn rút đơn ứng tuyển này không? Bạn có thể nộp lại sau.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Rút đơn',
+          style: 'destructive',
+          onPress: async () => {
+            setWithdrawing(true);
+            try {
+              await applicationService.withdrawApplication(applicationId);
+              Alert.alert('Thành công', 'Đã rút đơn ứng tuyển', [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.goBack(),
+                },
+              ]);
+            } catch (error: any) {
+              Alert.alert(
+                'Lỗi',
+                error?.response?.data?.message || 'Không thể rút đơn ứng tuyển'
+              );
+            } finally {
+              setWithdrawing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -222,6 +257,25 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
             ))}
           </View>
         </View>
+
+        {/* Withdraw Button - Only show if status is PENDING */}
+        {application.status === APPLICATION_STATUS.PENDING && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={[styles.withdrawButton, withdrawing && styles.withdrawButtonDisabled]}
+              onPress={handleWithdrawApplication}
+              disabled={withdrawing}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={COLORS.white} />
+              <Text style={styles.withdrawButtonText}>
+                {withdrawing ? 'Đang xử lý...' : 'Rút đơn ứng tuyển'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.withdrawNote}>
+              💡 Bạn có thể rút đơn và nộp lại với CV khác bất cứ lúc nào
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -374,6 +428,30 @@ const styles = StyleSheet.create({
     fontSize: SIZES.sm,
     color: COLORS.gray[500],
     marginTop: 2,
+  },
+  withdrawButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.danger,
+    padding: 16,
+    borderRadius: SIZES.radius,
+    gap: 8,
+  },
+  withdrawButtonDisabled: {
+    opacity: 0.6,
+  },
+  withdrawButtonText: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '600',
+  },
+  withdrawNote: {
+    fontSize: SIZES.sm,
+    color: COLORS.gray[500],
+    marginTop: 12,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

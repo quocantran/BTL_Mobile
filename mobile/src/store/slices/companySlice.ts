@@ -120,11 +120,13 @@ const companySlice = createSlice({
         const meta = action.payload.meta;
         const newCompanies = action.payload.result;
         
-        // If page 1, replace all. Otherwise append to existing list
+        // If page 1, replace all. Otherwise append to existing list (filter duplicates)
         if (meta.current === 1) {
           state.companies = newCompanies;
         } else {
-          state.companies = [...state.companies, ...newCompanies];
+          const existingIds = new Set(state.companies.map(c => c._id));
+          const uniqueNewCompanies = newCompanies.filter((c: ICompany) => !existingIds.has(c._id));
+          state.companies = [...state.companies, ...uniqueNewCompanies];
         }
         state.pagination = meta;
       })
@@ -151,11 +153,21 @@ const companySlice = createSlice({
         if (state.currentCompany && state.currentCompany._id === action.payload) {
           state.currentCompany.isFollowed = true;
         }
+        // Update isFollowed in companies list without refetching
+        const companyIndex = state.companies.findIndex(c => c._id === action.payload);
+        if (companyIndex !== -1) {
+          state.companies[companyIndex].isFollowed = true;
+        }
       })
       .addCase(unfollowCompany.fulfilled, (state, action) => {
         state.followedCompanies = state.followedCompanies.filter(id => id !== action.payload);
         if (state.currentCompany && state.currentCompany._id === action.payload) {
           state.currentCompany.isFollowed = false;
+        }
+        // Update isFollowed in companies list without refetching
+        const companyIndex = state.companies.findIndex(c => c._id === action.payload);
+        if (companyIndex !== -1) {
+          state.companies[companyIndex].isFollowed = false;
         }
       })
       .addCase(fetchFollowedCompanies.fulfilled, (state, action) => {

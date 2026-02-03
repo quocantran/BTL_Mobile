@@ -34,6 +34,9 @@ export class UpdateUserDto {
   address?: string;
 
   @IsOptional()
+  avatar?: string;
+
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => Company)

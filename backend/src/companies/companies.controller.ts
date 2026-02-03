@@ -94,4 +94,11 @@ export class CompaniesController {
     return this.companiesService.getAllByAdmin(qs);
   }
 
+  @Get(':id/hrs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
+  getCompanyHrs(@Param('id') id: string) {
+    return this.companiesService.getCompanyHrs(id);
+  }
+
 }

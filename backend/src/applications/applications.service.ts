@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,16 +17,32 @@ import { UserCVsService } from 'src/usercvs/usercvs.service';
 import { Role } from 'src/decorator/customize';
 import aqp from 'api-query-params';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { NotificationType } from 'src/notifications/schemas/notification.schema';
+import { NotificationTargetType, NotificationType } from 'src/notifications/schemas/notification.schema';
+import { AIMatchingService } from 'src/ai-matching/ai-matching.service';
+import { CVProcessingService } from 'src/ai-matching/cv-processing.service';
+import { JobsService } from 'src/jobs/jobs.service';
+import {
+  ICandidateMatchResult,
+  IAIRankingResponse,
+} from 'src/ai-matching/dto/ai-match-result.dto';
+import { CreateNotificationDto } from 'src/notifications/dto/create-notification.dto';
+import { CVMatchResult, CVMatchResultDocument } from 'src/ai-matching/schemas/cv-match-result.schema';
 
 @Injectable()
 export class ApplicationsService {
   constructor(
     @InjectModel(Application.name)
     private readonly applicationModel: SoftDeleteModel<ApplicationDocument>,
+
+    @InjectModel(CVMatchResult.name)
+    private readonly cvMatchResultModel: SoftDeleteModel<CVMatchResultDocument>,
     private readonly usersService: UsersService,
     private readonly userCVsService: UserCVsService,
     private readonly notificationsService: NotificationsService,
+    private readonly aiMatchingService: AIMatchingService,
+    private readonly cvProcessingService: CVProcessingService,
+    @Inject(forwardRef(() => JobsService))
+    private readonly jobsService: JobsService,
   ) {}
 
   // User applies for a job with selected CV
@@ -37,16 +55,13 @@ export class ApplicationsService {
       throw new BadRequestException('CV không tồn tại hoặc không thuộc về bạn');
     }
 
-    // Check if already applied to this job
-    const existingApplication = await this.applicationModel.findOne({
-      userId: user._id,
-      jobId,
-      isDeleted: false,
-      status: { $ne: ApplicationStatus.REJECTED },
-    });
+    // Cho phép nộp lại nhiều lần (đã bỏ check duplicate)
+    // User có thể rút đơn và nộp lại với CV khác
 
-    if (existingApplication) {
-      throw new BadRequestException('Bạn đã nộp đơn cho công việc này rồi');
+    // Get job details for AI processing
+    const job = await this.jobsService.findOne(jobId);
+    if (!job) {
+      throw new BadRequestException('Công việc không tồn tại');
     }
 
     const application = await this.applicationModel.create({
@@ -72,32 +87,63 @@ export class ApplicationsService {
       },
     });
 
-    const applicationInDb = (await this.applicationModel.findById(application._id)).populate([
-      {
-        path: 'jobId',
-        select: 'name',
-      },
-      {
-        path: 'companyId',
-        select: 'name',
-      },
-      {
-        path: 'userId',
-        select: 'name',
+    // Queue CV processing for AI matching (async - returns immediately)
+    const isImage = /\.(jpg|jpeg|png|webp)$/i.test(cv.url);
+    if (isImage) {
+      try {
+        const jobSkills = Array.isArray(job.skills)
+          ? job.skills.map((s: any) => typeof s === 'string' ? s : s.name)
+          : [];
+
+        await this.cvProcessingService.queueCVProcessing({
+          cvId: cv._id.toString(),
+          userId: user._id,
+          applicationId: application._id.toString(),
+          cvUrl: cv.url,
+          job: {
+            _id: job._id.toString(),
+            name: job.name,
+            description: job.description,
+            skills: jobSkills,
+            level: job.level,
+          },
+        });
+        console.log('CV processing queued for application:', application._id);
+      } catch (error) {
+        console.error('Failed to queue CV processing:', error);
+        // Don't fail the application creation if queuing fails
       }
-    ]) as any;
-    const hr = await this.usersService.findByCompanyId(applicationInDb.companyId._id.toString());
-
-    const notiObj = {
-      userId: hr._id.toString(),
-      title: 'Đơn ứng tuyển mới',
-      content: `Bạn có một đơn ứng tuyển mới cho công việc ${applicationInDb.jobId.name} từ ứng viên ${applicationInDb.userId.name}.`,
-      type: NotificationType.SYSTEM,
-      data: { applicationId: application._id.toString() },
-
     }
 
-    this.notificationsService.create(notiObj);
+    const applicationInDb = await this.applicationModel.findById(application._id)
+      .populate([
+        { path: 'jobId', select: 'name _id' },
+        { path: 'companyId', select: 'name _id' },
+        { path: 'userId', select: 'name _id' },
+      ]) as any;
+    
+    console.log("Application created:", applicationInDb);
+    const hrs = await this.usersService.findAllByCompanyId(applicationInDb.companyId._id.toString());
+
+    console.log("HRs found for company:", hrs?.length);
+    if (hrs && hrs.length > 0) {
+      for (const hr of hrs) {
+        const notiObj: CreateNotificationDto = {
+          userId: hr._id.toString(),
+          title: 'Đơn ứng tuyển mới',
+          content: `Bạn có một đơn ứng tuyển mới cho công việc ${applicationInDb.jobId.name} từ ứng viên ${applicationInDb.userId.name}.`,
+          type: NotificationType.RESUME,
+          targetType: NotificationTargetType.APPLICATION,
+          targetId: application._id.toString(),
+          data: { 
+            applicationId: application._id.toString(),
+            jobId: applicationInDb.jobId._id.toString(),
+          },
+        };
+
+        this.notificationsService.create(notiObj);
+      }
+    }
 
 
     return {
@@ -131,10 +177,10 @@ export class ApplicationsService {
       .select(projection)
       .sort(sort as any)
       .populate([
-        { path: 'cvId', select: 'url title' },
-        { path: 'userId', select: 'name email avatar' },
-        { path: 'companyId', select: 'name logo' },
-        { path: 'jobId', select: 'name salary level' },
+        { path: 'cvId', select: 'url title _id' },
+        { path: 'userId', select: 'name email avatar _id' },
+        { path: 'companyId', select: 'name logo _id' },
+        { path: 'jobId', select: 'name salary level _id' },
       ]);
 
     return {
@@ -172,8 +218,8 @@ export class ApplicationsService {
       .limit(limit)
       .sort({ createdAt: -1 })
       .populate([
-        { path: 'cvId', select: 'url title' },
-        { path: 'userId', select: 'name email address gender' },
+        { path: 'cvId', select: 'url title _id' },
+        { path: 'userId', select: 'name email address gender _id' },
       ]);
 
     return {
@@ -193,9 +239,9 @@ export class ApplicationsService {
       .find({ userId: user._id, isDeleted: false })
       .sort({ createdAt: -1 })
       .populate([
-        { path: 'cvId', select: 'url title' },
-        { path: 'companyId', select: 'name logo' },
-        { path: 'jobId', select: 'name salary level location' },
+        { path: 'cvId', select: 'url title _id' },
+        { path: 'companyId', select: 'name logo _id' },
+        { path: 'jobId', select: 'name salary level location _id' },
       ]);
 
     return applications;
@@ -210,10 +256,10 @@ export class ApplicationsService {
     const application = await this.applicationModel
       .findOne({ _id: id, isDeleted: false })
       .populate([
-        { path: 'cvId', select: 'url title' },
-        { path: 'userId', select: 'name email avatar phone' },
-        { path: 'companyId', select: 'name logo' },
-        { path: 'jobId', select: 'name salary level location' },
+        { path: 'cvId', select: 'url title _id' },
+        { path: 'userId', select: 'name email avatar phone _id' },
+        { path: 'companyId', select: 'name logo _id' },
+        { path: 'jobId', select: 'name salary level location _id' },
       ]);
 
     if (!application) {
@@ -251,16 +297,20 @@ export class ApplicationsService {
       },
     };
 
-    //send notification to user about status update
-    //userId, title, content, type, data
-
-    let notiObj = {
+    //send notification to user about status update with navigation target
+    const notiObj: CreateNotificationDto = {
       userId: application.userId.toString(),
       title: '',
       content: '',
-      type: NotificationType.SYSTEM,
-      data: { applicationId: application._id.toString() },
-    }
+      type: NotificationType.RESUME,
+      targetType: NotificationTargetType.APPLICATION,
+      targetId: application._id.toString(),
+      data: { 
+        applicationId: application._id.toString(),
+        jobId: application.jobId._id.toString(),
+        companyId: application.companyId._id.toString(),
+      },
+    };
 
     switch (updateDto.status) {
       case ApplicationStatus.REVIEWING:
@@ -312,12 +362,7 @@ export class ApplicationsService {
       );
     }
 
-    // Only allow withdrawal if status is PENDING
-    if (application.status !== ApplicationStatus.PENDING) {
-      throw new BadRequestException(
-        'Chỉ có thể hủy đơn ứng tuyển khi đang ở trạng thái chờ xử lý',
-      );
-    }
+
 
     await this.applicationModel.updateOne(
       { _id: id },
@@ -328,6 +373,8 @@ export class ApplicationsService {
         },
       },
     );
+
+    await this.cvMatchResultModel.deleteOne({ applicationId: id });
 
     return await this.applicationModel.softDelete({ _id: id });
   }
@@ -358,5 +405,81 @@ export class ApplicationsService {
       jobId,
       isDeleted: false,
     });
+  }
+
+  /**
+   * AI-powered ranking of candidates for a specific job
+   * Now retrieves pre-calculated results from database (fast query)
+   * CV processing is done asynchronously when applications are created
+   */
+  async getAIRankedCandidates(
+    jobId: string,
+    topN: number = 10,
+    user: IUser,
+  ): Promise<IAIRankingResponse> {
+    // 1. Validate job exists
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      throw new BadRequestException('Job ID không hợp lệ');
+    }
+
+    const job = await this.jobsService.findOne(jobId);
+    if (!job) {
+      throw new NotFoundException('Công việc không tồn tại');
+    }
+
+    // 2. Get total applications count
+    const totalApplications = await this.applicationModel.countDocuments({
+      jobId,
+      isDeleted: false,
+    });
+
+    if (totalApplications === 0) {
+      return {
+        jobId,
+        jobName: job.name,
+        totalApplications: 0,
+        rankedCandidates: [],
+        processedAt: new Date().toISOString(),
+      };
+    }
+
+    // 3. Get pre-calculated ranked candidates from database (fast query)
+    const rankedResults = await this.cvProcessingService.getRankedCandidates(jobId, topN);
+
+    // 4. Transform to response format
+    const candidateResults: ICandidateMatchResult[] = rankedResults.map((result: any) => {
+      const userInfo = result.userId;
+      const cvInfo = result.cvId;
+      const appInfo = result.applicationId;
+
+      return {
+        applicationId: appInfo?._id?.toString() || result.applicationId?.toString() || '',
+        candidateId: userInfo?._id?.toString() || '',
+        candidateName: userInfo?.name || 'Ẩn danh',
+        candidateEmail: userInfo?.email || '',
+        candidateAvatar: userInfo?.avatar,
+        cvId: cvInfo?._id?.toString() || '',
+        cvTitle: cvInfo?.title || 'CV',
+        cvUrl: result.cvUrl || cvInfo?.url || '',
+        matchScore: result.matchScore,
+        matchedSkills: result.matchedSkills || [],
+        missingSkills: result.missingSkills || [],
+        shortExplanation: result.explanation || '',
+        applicationStatus: appInfo?.status || 'PENDING',
+        appliedAt: appInfo?.createdAt?.toISOString() || new Date().toISOString(),
+      };
+    });
+
+    // 5. Get processing status for additional info
+    const processingStatus = await this.cvProcessingService.getProcessingStatus(jobId);
+
+    return {
+      jobId,
+      jobName: job.name,
+      totalApplications,
+      rankedCandidates: candidateResults,
+      processedAt: new Date().toISOString(),
+      processingStatus, // Additional field for UI to show processing progress
+    } as IAIRankingResponse;
   }
 }

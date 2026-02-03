@@ -19,7 +19,8 @@ import { CompaniesService } from 'src/companies/companies.service';
 import { Company, CompanyDocument } from 'src/companies/schemas/company.schema';
 import { Application, ApplicationDocument } from 'src/applications/schemas/application.schema';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { NotificationType } from 'src/notifications/schemas/notification.schema';
+import { NotificationTargetType, NotificationType } from 'src/notifications/schemas/notification.schema';
+import { CVProcessingService } from 'src/ai-matching/cv-processing.service';
 
 @Injectable()
 export class JobsService {
@@ -38,6 +39,8 @@ export class JobsService {
     private readonly usersService: UsersService,
 
     private readonly notificationsService: NotificationsService,
+    
+    private readonly cvProcessingService: CVProcessingService,
   ) {}
 
   async getAll() {
@@ -70,6 +73,8 @@ export class JobsService {
     delete filter.pageSize;
 
     filter['company._id'] = new mongoose.Types.ObjectId(companyInDb._id);
+
+    filter['endDate'] = { $gt: new Date() };
 
     const totalRecord = (await this.jobModel.find(filter)).length;
     const limit = qs.pageSize ? parseInt(qs.pageSize) : 10;
@@ -112,6 +117,74 @@ export class JobsService {
 
   }
 
+  async searchJobsByHr(user: IUser, name: string, qs: any) {
+    const userInDb = await this.usersService.findOneByEmail(user.email);
+
+    if (!userInDb.company) {
+      throw new BadRequestException('HR does not belong to any company');
+    }
+
+    const companyInDb = await this.companyModel.findOne({
+      _id: userInDb.company._id,
+    });
+
+    if(!companyInDb) {
+      throw new BadRequestException('Company not found');
+    }
+
+    if(!companyInDb.isActive) {
+      throw new BadRequestException('Company is not active');
+    }
+
+    const { filter, sort, population } = aqp(qs);
+    delete filter.current;
+    delete filter.pageSize;
+    delete filter.name;
+
+    filter['company._id'] = new mongoose.Types.ObjectId(companyInDb._id);
+
+    // Add name search filter if provided
+    if (name && name.trim()) {
+      filter.name = { $regex: name.trim(), $options: 'i' };
+    }
+
+    const totalRecord = (await this.jobModel.find(filter)).length;
+    const limit = qs.pageSize ? parseInt(qs.pageSize) : 10;
+    const totalPage = Math.ceil(totalRecord / limit);
+    const skip = (qs.current - 1) * limit;
+    const current = +qs.current ? +qs.current : 1;
+
+    const jobs = await this.jobModel
+      .find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort(sort as any)
+      .populate({
+        path: 'skills',
+        select: 'name',
+      });
+
+    const jobsWithApplicationsCount = await Promise.all(
+      jobs.map(async (job) => {
+        const applications = await this.applicationModel.countDocuments({ 'jobId': job._id });
+        return {
+          ...job.toObject(),
+          applicationsCount: applications,
+        };
+      }),
+    );
+
+    return {
+      meta: {
+        current: current, 
+        pageSize: limit,
+        pages: totalPage,
+        total: totalRecord,
+      },
+      result: jobsWithApplicationsCount,
+    };
+  }
+
   async create(createJobDto: CreateJobDto, user: IUser) {
     const userInDb = await this.usersService.findOneByEmail(user.email);
 
@@ -143,6 +216,7 @@ export class JobsService {
       _id: new mongoose.Types.ObjectId(company._id),
       name: company.name,
       logo: company.logo,
+      isActive: company.isActive,
     };
     
     const newJob = await this.jobModel.create({
@@ -153,13 +227,15 @@ export class JobsService {
       },
     });
 
-    //send notification to all users following the company
+    //send notification to all users following the company with navigation target
     await this.notificationsService.createBulk(
       company.usersFollow.map(id => id.toString()),
       'Công ty ' + company.name + ' vừa đăng tuyển công việc mới',
       `Công việc ${newJob.name} với mức lương ${newJob.salary} VND đã được đăng tuyển. Hãy nhanh tay ứng tuyển ngay!`,
-      NotificationType.SYSTEM,
-      { jobId: newJob._id.toString() },
+      NotificationType.JOB,
+      NotificationTargetType.JOB,
+      newJob._id.toString(), // targetId
+      { jobId: newJob._id.toString(), companyId: company._id.toString() },
     );
 
     await this.redisService.invalidateJobsCache();
@@ -204,10 +280,15 @@ export class JobsService {
 
       if (currentUser && currentUser.company) {
         filter['company._id'] = currentUser.company._id;
+      } else {
+        // Only show jobs from active companies for regular users
+        filter['company.isActive'] = true;
       }
 
       if(filter.companyId) {
         filter['company._id'] = new mongoose.Types.ObjectId(filter.companyId);
+        // When filtering by specific company, don't require isActive check (admin/HR use case)
+        delete filter['company.isActive'];
       }
       delete filter.companyId;
       delete filter.email;
@@ -302,7 +383,7 @@ export class JobsService {
 
     await this.redisService.invalidateJobsCache();
 
-    return await this.jobModel.updateOne(
+    const result = await this.jobModel.updateOne(
       { _id: id },
       {
         ...updateJobDto,
@@ -312,6 +393,24 @@ export class JobsService {
         },
       },
     );
+
+    // Re-process all CVs for this job when job details are updated
+    // This ensures AI matching scores are recalculated with new job requirements
+    const updatedJob = await this.jobModel.findById(id).populate('skills').lean();
+    if (updatedJob) {
+      const jobSkills = Array.isArray(updatedJob.skills)
+        ? updatedJob.skills.map((s: any) => typeof s === 'string' ? s : s.name)
+        : [];
+      
+      await this.cvProcessingService.reprocessAllCVsForJob(id, {
+        name: updatedJob.name,
+        description: updatedJob.description,
+        skills: jobSkills,
+        level: updatedJob.level,
+      });
+    }
+
+    return result;
   }
 
   async remove(id: string, user: IUser) {

@@ -69,4 +69,11 @@ export class JobsController {
   getJobsByHr(@User() user: IUser, @Query() qs: string) {
     return this.jobsService.getJobsByHr(user, qs);
   }
+
+  @Get('/by-hr/search')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  searchJobsByHr(@User() user: IUser, @Query('name') name: string, @Query() qs: string) {
+    return this.jobsService.searchJobsByHr(user, name, qs);
+  }
 }

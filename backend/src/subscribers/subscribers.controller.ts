@@ -22,26 +22,42 @@ export class SubscribersController {
   constructor(private readonly subscribersService: SubscribersService) {}
 
   @Post()
-  create(@Body() createSubscriberDto: CreateSubscriberDto) {
-    return this.subscribersService.create(createSubscriberDto);
+  @UseGuards(JwtAuthGuard)
+  create(@Body() createSubscriberDto: CreateSubscriberDto, @User() user: IUser) {
+    return this.subscribersService.createOrUpdate(createSubscriberDto, user);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
   update(
     @Param('id') id: string,
     @Body() updateSubscriberDto: UpdateSubscriberDto,
+    @User() user: IUser,
   ) {
-    return this.subscribersService.update(id, updateSubscriberDto);
+    return this.subscribersService.update(id, updateSubscriberDto, user);
   }
 
-  @Get('')
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMySubscription(@User() user: IUser) {
+    return this.subscribersService.getSubscriberByUserId(user._id);
+  }
+
+  @Get('email')
   @UseGuards(JwtAuthGuard)
   async getByEmail(@User() user: IUser) {
     return this.subscribersService.getSubscriberByEmail(user.email);
   }
 
+  @Patch('toggle-active/:id')
+  @UseGuards(JwtAuthGuard)
+  toggleActive(@Param('id') id: string, @User() user: IUser) {
+    return this.subscribersService.toggleActive(id, user);
+  }
+
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.subscribersService.remove(id);
+  @UseGuards(JwtAuthGuard)
+  remove(@Param('id') id: string, @User() user: IUser) {
+    return this.subscribersService.remove(id, user);
   }
 }

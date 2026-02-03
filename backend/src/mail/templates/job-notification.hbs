@@ -1,66 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Việc làm mới</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .job-card {
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 15px;
-    }
-    .job-title {
-      font-size: 18px;
-      font-weight: bold;
-      color: #2563eb;
-      margin-bottom: 5px;
-    }
-    .company-name {
-      font-size: 14px;
-      color: #6b7280;
-    }
-    .salary {
-      font-size: 16px;
-      color: #10b981;
-      font-weight: bold;
-      margin-top: 10px;
-    }
-    .footer {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Việc làm mới phù hợp</title>
 </head>
-<body>
-  <div class="container">
-    <h2>Việc làm phù hợp với bạn</h2>
-    <p>Xin chào {{subscriber.email}},</p>
-    <p>Dưới đây là các việc làm mới phù hợp với kỹ năng của bạn:</p>
-    
-    {{#each jobs}}
-    <div class="job-card">
-      <div class="job-title">{{this.name}}</div>
-      <div class="company-name">{{this.company.name}}</div>
-      <div class="salary">{{this.salary}}</div>
-      <p>{{this.location}}</p>
-    </div>
-    {{/each}}
-    
-    <div class="footer">
-      <p>Trân trọng,<br>Đội ngũ hỗ trợ</p>
-    </div>
-  </div>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f7fa; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700;">🎯 Việc làm phù hợp với bạn</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 15px;">Dựa trên kỹ năng: <strong>{{skillNames}}</strong></p>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 35px 30px;">
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 8px;">Xin chào <strong>{{subscriberEmail}}</strong>,</p>
+              <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 30px;">Chúng tôi tìm thấy một số việc làm mới phù hợp với kỹ năng của bạn!</p>
+              
+              <!-- Jobs List -->
+              {{#each jobs}}
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+                <h3 style="color: #1e293b; font-size: 17px; font-weight: 600; margin: 0 0 8px;">{{this.name}}</h3>
+                <p style="color: #64748b; font-size: 14px; margin: 0 0 8px;">🏢 {{this.company.name}}</p>
+                <p style="color: #10b981; font-size: 15px; font-weight: 600; margin: 0 0 4px;">💰 {{#if this.salary}}{{this.salary}} VNĐ{{else}}Thương lượng{{/if}}</p>
+                {{#if this.location}}<p style="color: #6b7280; font-size: 14px; margin: 0;">📍 {{this.location}}</p>{{/if}}
+              </div>
+              {{/each}}
+              
+              <!-- Tips -->
+              <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin-top: 20px;">
+                <p style="color: #92400e; font-size: 14px; margin: 0; line-height: 1.6;">💡 <strong>Mẹo:</strong> Cập nhật CV thường xuyên để tăng cơ hội được nhà tuyển dụng chú ý!</p>
+              </div>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="color: #64748b; font-size: 14px; margin: 0 0 8px;">Trân trọng,</p>
+              <p style="color: #1e293b; font-size: 16px; font-weight: 600; margin: 0 0 20px;">Đội ngũ hỗ trợ Job Portal</p>
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">© 2026 Job Portal. All rights reserved.</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

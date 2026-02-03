@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
-import { NotificationType } from '../schemas/notification.schema';
+import { NotificationType, NotificationTargetType } from '../schemas/notification.schema';
 
 export class CreateNotificationDto {
   @IsNotEmpty({ message: 'User ID is required' })
@@ -14,6 +14,13 @@ export class CreateNotificationDto {
   @IsOptional()
   @IsEnum(NotificationType)
   type?: NotificationType;
+
+  @IsOptional()
+  @IsEnum(NotificationTargetType)
+  targetType?: NotificationTargetType;
+
+  @IsOptional()
+  targetId?: string;
 
   @IsOptional()
   data?: Record<string, any>;

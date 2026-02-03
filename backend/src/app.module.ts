@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bull';
 import { softDeletePlugin } from 'soft-delete-plugin-mongoose';
 
 import { AppController } from './app.controller';
@@ -23,6 +24,7 @@ import { MailModule } from './mail/mail.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RedisModule } from './redis/redis.module';
+import { AIMatchingModule } from './ai-matching/ai-matching.module';
 
 @Module({
   imports: [
@@ -40,6 +42,19 @@ import { RedisModule } from './redis/redis.module';
 
     // Schedule (Cron jobs)
     ScheduleModule.forRoot(),
+
+    // Bull Queue with Redis
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        redis: {
+          host: configService.get<string>('REDIS_HOST') || 'localhost',
+          port: configService.get<number>('REDIS_PORT') || 6379,
+          password: configService.get<string>('REDIS_PASSWORD') || undefined,
+        },
+      }),
+      inject: [ConfigService],
+    }),
 
     // MongoDB
     MongooseModule.forRootAsync({
@@ -69,6 +84,7 @@ import { RedisModule } from './redis/redis.module';
     CommentsModule,
     NotificationsModule,
     RedisModule,
+    AIMatchingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

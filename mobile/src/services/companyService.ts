@@ -75,6 +75,33 @@ export const companyService = {
   async updateCompanyByHr(companyId: string, data: { name?: string; description?: string; address?: string; logo?: string }): Promise<IApiResponse<any>> {
     const response = await api.patch(`/companies/${companyId}`, data);
     return response.data;
-  }
+  },
+
+  // Search HRs by name for adding to company
+  async searchHrs(name: string, companyId?: string): Promise<IApiResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (name) params.append('name', name);
+    if (companyId) params.append('companyId', companyId);
+    const response = await api.get(`/users/hrs/search?${params.toString()}`);
+    return response.data;
+  },
+
+  // Add HR to company
+  async addHrToCompany(hrId: string, companyId: string, companyName: string): Promise<IApiResponse<any>> {
+    const response = await api.post('/users/hrs/add-to-company', { hrId, companyId, companyName });
+    return response.data;
+  },
+
+  // Remove HR from company
+  async removeHrFromCompany(hrId: string, companyId: string): Promise<IApiResponse<any>> {
+    const response = await api.post('/users/hrs/remove-from-company', { hrId, companyId });
+    return response.data;
+  },
+
+  // Get company HRs
+  async getCompanyHrs(companyId: string): Promise<IApiResponse<any[]>> {
+    const response = await api.get(`/companies/${companyId}/hrs`);
+    return response.data;
+  },
 
 };

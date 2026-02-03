@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
@@ -10,7 +11,7 @@ import { companyService } from '../../../services/companyService';
 import { COLORS } from '../../../constants';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Loading } from '../../../components/common/Loading';
-import { RichEditor, RichToolbar } from 'react-native-pell-rich-editor';
+import { RichEditor, RichToolbar, actions } from 'react-native-pell-rich-editor';
 
 const HrCompanyUpdateScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -170,69 +171,208 @@ const HrCompanyUpdateScreen: React.FC = () => {
   if (loading) return <Loading />;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
-      <Input
-        label="Tên công ty"
-        placeholder="Nhập tên công ty"
-        value={formData.companyName}
-        onChangeText={(value) => updateField('companyName', value)}
-        error={errors.companyName}
-        leftIcon={null}
-      />
-      <Input
-        label="Địa chỉ công ty"
-        placeholder="Nhập địa chỉ công ty"
-        value={formData.companyAddress}
-        onChangeText={(value) => updateField('companyAddress', value)}
-        error={errors.companyAddress}
-        leftIcon={null}
-      />
-      <View>
-        <UploadLogo
-          uri={formData.companyLogoUrl}
-          onPress={pickAndUpload}
-          loading={isLogoUploading}
-        />
-        {errors.companyLogoUrl && (
-          <Text style={{ color: 'red', marginTop: 4 }}>{errors.companyLogoUrl}</Text>
-        )}
-      </View>
-      <View style={{ marginTop: 12 }}>
-        <RichEditor
-          ref={editor}
-          placeholder="Nhập mô tả công ty..."
-          style={styles.richEditor}
-          initialHeight={200}
-          initialContentHTML={formData.companyDescription}
-          onChange={(html) => updateField('companyDescription', html)}
-        />
-        <RichToolbar editor={editor} style={styles.richToolbar} />
-        {errors.companyDescription && (
-          <Text style={{ color: 'red', marginTop: 4 }}>{errors.companyDescription}</Text>
-        )}
-      </View>
-      <Button
-        title="Cập nhật"
-        onPress={handleUpdate}
-        loading={loading}
-        style={styles.updateButton}
-      />
-    </ScrollView>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="image-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Logo công ty</Text>
+            </View>
+            <View style={styles.logoContainer}>
+              <UploadLogo
+                uri={formData.companyLogoUrl}
+                onPress={pickAndUpload}
+                loading={isLogoUploading}
+              />
+              {errors.companyLogoUrl && (
+                <Text style={styles.errorText}>{errors.companyLogoUrl}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Basic Info Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="business-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+            </View>
+            <Input
+              label="Tên công ty"
+              placeholder="Nhập tên công ty"
+              value={formData.companyName}
+              onChangeText={(value) => updateField('companyName', value)}
+              error={errors.companyName}
+              leftIcon={null}
+            />
+            <Input
+              label="Địa chỉ công ty"
+              placeholder="Nhập địa chỉ công ty"
+              value={formData.companyAddress}
+              onChangeText={(value) => updateField('companyAddress', value)}
+              error={errors.companyAddress}
+              leftIcon={null}
+            />
+          </View>
+
+          {/* Description Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Mô tả công ty</Text>
+            </View>
+            <View style={styles.editorContainer}>
+              <RichToolbar 
+                editor={editor} 
+                style={styles.richToolbar}
+                iconSize={18}
+                actions={[
+                  actions.setBold,
+                  actions.setItalic,
+                  actions.setUnderline,
+                  actions.insertBulletsList,
+                  actions.insertOrderedList,
+                  actions.heading1,
+                  actions.heading2,
+                ]}
+              />
+              <RichEditor
+                ref={editor}
+                placeholder="Nhập mô tả chi tiết về công ty, văn hóa, phúc lợi..."
+                style={styles.richEditor}
+                initialHeight={200}
+                initialContentHTML={formData.companyDescription}
+                onChange={(html) => updateField('companyDescription', html)}
+                editorStyle={{
+                  backgroundColor: COLORS.white,
+                  color: COLORS.gray[800],
+                  placeholderColor: COLORS.gray[400],
+                  contentCSSText: 'font-size: 14px; line-height: 22px;',
+                }}
+              />
+            </View>
+            {errors.companyDescription && (
+              <Text style={styles.errorText}>{errors.companyDescription}</Text>
+            )}
+          </View>
+
+          {/* Submit Button */}
+          <Button
+            title="Cập nhật thông tin"
+            onPress={handleUpdate}
+            loading={loading}
+            style={styles.updateButton}
+          />
+
+          {/* Tips Card */}
+          <View style={styles.tipsCard}>
+            <Ionicons name="bulb-outline" size={20} color={COLORS.warning} />
+            <View style={styles.tipsContent}>
+              <Text style={styles.tipsTitle}>Mẹo thu hút ứng viên</Text>
+              <Text style={styles.tipsText}>
+                • Mô tả chi tiết về văn hóa công ty{'\n'}
+                • Liệt kê các phúc lợi hấp dẫn{'\n'}
+                • Chia sẻ câu chuyện thành công
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  updateButton: { marginTop: 20 },
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  section: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: COLORS.gray[400],
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.gray[800],
+  },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  editorContainer: {
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   richEditor: {
     minHeight: 200,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
-    borderRadius: 8,
+    backgroundColor: COLORS.white,
   },
   richToolbar: {
-    borderTopWidth: 1,
-    borderColor: COLORS.gray[200],
+    backgroundColor: COLORS.gray[50],
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[200],
+  },
+  errorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    marginTop: 8,
+  },
+  updateButton: { 
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  tipsCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.warning + '10',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  tipsContent: {
+    flex: 1,
+  },
+  tipsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.warning,
+    marginBottom: 8,
+  },
+  tipsText: {
+    fontSize: 13,
+    color: COLORS.gray[600],
+    lineHeight: 20,
   },
 });
 

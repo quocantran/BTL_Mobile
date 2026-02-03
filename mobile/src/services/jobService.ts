@@ -81,6 +81,17 @@ export const jobService = {
     return response.data;
   },
 
+  async searchJobsByHr(name: string, params: IJobSearchParams = {}): Promise<IApiResponse<IPaginatedResponse<IJob>>> {
+    const queryParams = new URLSearchParams();
+    
+    if (name) queryParams.append('name', name);
+    if (params.current) queryParams.append('current', params.current.toString());
+    if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+
+    const response = await api.get(`/jobs/by-hr/search?${queryParams.toString()}`);
+    return response.data;
+  },
+
   async createJob(data: IJob): Promise<IApiResponse<IJob>> {
     const response = await api.post('/jobs', data);
     return response.data;

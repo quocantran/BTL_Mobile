@@ -182,16 +182,22 @@ export class CompaniesService {
       )
       .exec();
 
-    //send notification to hr when user follow company
-    const hrInCompany = await this.usersService.findByCompanyId(companyId);
-    const notiObj = {
-      userId: hrInCompany._id.toString(),
-      title: 'Công ty của bạn có người theo dõi mới',
-      content: `Người dùng ${user.name} đã theo dõi công ty của bạn.`,
-      type: NotificationType.COMPANY,
-      data: { companyId },
-    };
-    this.notificationService.create(notiObj as CreateNotificationDto);
+    //send notification to all hrs when user follow company
+    const hrsInCompany = await this.usersService.findAllByCompanyId(companyId);
+    if (hrsInCompany && hrsInCompany.length > 0) {
+      for (const hr of hrsInCompany) {
+        const notiObj = {
+          userId: hr._id.toString(),
+          title: 'Công ty của bạn có người theo dõi mới',
+          content: `Người dùng ${user.name} đã theo dõi công ty của bạn.`,
+          type: NotificationType.COMPANY,
+          targetType: 'company',
+          targetId: companyId,
+          data: { companyId },
+        };
+        this.notificationService.create(notiObj as CreateNotificationDto);
+      }
+    }
 
     return user._id;
   }
@@ -201,28 +207,43 @@ export class CompaniesService {
     if (!companyExist) throw new BadRequestException('Company not found');
 
     const isAlreadyActive = companyExist.isActive;
+    const newActiveStatus = !isAlreadyActive;
 
     const updatedCompany = await this.companyModel.updateOne(
       { _id: companyId },
-      { isActive: !isAlreadyActive },
+      { isActive: newActiveStatus },
     );
+    
+    // Update all jobs belonging to this company with new isActive status
+    await this.jobModel.updateMany(
+      { 'company._id': new mongoose.Types.ObjectId(companyId) },
+      { 'company.isActive': newActiveStatus },
+    );
+
     await this.redisService.invalidateCompaniesCache();
 
-    const hrInCompany = await this.usersService.findByCompanyId(companyId);
+    // Notify all HRs in company
+    const hrsInCompany = await this.usersService.findAllByCompanyId(companyId);
 
-    const notiObj = {
-      userId: hrInCompany._id.toString(),
-      title: isAlreadyActive
-        ? 'Công ty của bạn đã bị khóa'
-        : 'Công ty của bạn đã được duyệt',
-      content: isAlreadyActive
-        ? 'Công ty của bạn đã bị khóa bởi quản trị viên. Vui lòng liên hệ để biết thêm chi tiết.'
-        : 'Công ty của bạn đã được duyệt bởi quản trị viên. Bây giờ bạn có thể đăng tuyển dụng',
-      type: NotificationType.COMPANY,
-      data: { companyId },
-    };
+    if (hrsInCompany && hrsInCompany.length > 0) {
+      for (const hr of hrsInCompany) {
+        const notiObj = {
+          userId: hr._id.toString(),
+          title: isAlreadyActive
+            ? 'Công ty của bạn đã bị khóa'
+            : 'Công ty của bạn đã được duyệt',
+          content: isAlreadyActive
+            ? 'Công ty của bạn đã bị khóa bởi quản trị viên. Vui lòng liên hệ để biết thêm chi tiết.'
+            : 'Công ty của bạn đã được duyệt bởi quản trị viên. Bây giờ bạn có thể đăng tuyển dụng',
+          type: NotificationType.COMPANY,
+          targetType: 'company',
+          targetId: companyId,
+          data: { companyId },
+        };
 
-    await this.notificationService.create(notiObj as CreateNotificationDto);
+        await this.notificationService.create(notiObj as CreateNotificationDto);
+      }
+    }
     return updatedCompany;
   }
 
@@ -278,12 +299,27 @@ export class CompaniesService {
 
     if (!company) throw new NotFoundException('Company not found');
 
-    const hrInCompany = await this.usersService.findByCompanyId(id);
+    const hrsInCompany = await this.usersService.findAllByCompanyId(id);
 
     const companyObj = company.toObject() as any;
-    companyObj.hr = hrInCompany;
+    companyObj.hrs = hrsInCompany;
+    // Keep hr for backward compatibility (first HR)
+    companyObj.hr = hrsInCompany && hrsInCompany.length > 0 ? hrsInCompany[0] : null;
+
+    const jobCount = await this.jobModel.countDocuments({
+      'company._id': company._id,
+    });
+    companyObj.jobCount = jobCount;
 
     return companyObj;
+  }
+
+  async getCompanyHrs(companyId: string) {
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const hrs = await this.usersService.findAllByCompanyId(companyId);
+    return hrs;
   }
 
   async findWithUserFollow(companyId: string) {
