@@ -100,6 +100,11 @@ const HrCompanyDetailScreen: React.FC = () => {
   // Add HR to company
   const handleAddHr = async (hr: IHrUser) => {
     if (!company) return;
+    const existingHrs: IHrUser[] = (company as any).hrs || [];
+    if (existingHrs.some((h) => h._id === hr._id)) {
+      Alert.alert('Thông báo', `${hr.name} đã tồn tại trong công ty`);
+      return;
+    }
     setAddingHr(hr._id);
     try {
       await companyService.addHrToCompany(hr._id, company._id, company.name);

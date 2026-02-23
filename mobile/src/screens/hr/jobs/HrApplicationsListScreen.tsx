@@ -52,6 +52,7 @@ const StatusFilter = ({
   <ScrollView 
     horizontal 
     showsHorizontalScrollIndicator={false}
+    style={styles.filterScrollView}
     contentContainerStyle={styles.filterRow}
   >
     <TouchableOpacity
@@ -65,7 +66,7 @@ const StatusFilter = ({
         styles.filterChipText,
         !status && styles.filterChipTextActive
       ]}>
-        Tất cả ({counts.ALL || 0})
+        {`Tất cả (${counts.ALL || 0})`}
       </Text>
     </TouchableOpacity>
     {(Object.keys(APPLICATION_STATUS) as Array<keyof typeof APPLICATION_STATUS>).map((key) => (
@@ -82,7 +83,7 @@ const StatusFilter = ({
           styles.filterChipText,
           status === key && { color: STATUS_COLORS[key], fontWeight: '600' }
         ]}>
-          {APPLICATION_STATUS[key]} ({counts[key] || 0})
+          {`${APPLICATION_STATUS[key]} (${counts[key] || 0})`}
         </Text>
       </TouchableOpacity>
     ))}
@@ -393,7 +394,7 @@ const HrApplicationsListScreen: React.FC = () => {
           data={applications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, applications.length === 0 && { flexGrow: 1 }]}
           showsVerticalScrollIndicator={false}
           
           refreshControl={
@@ -403,11 +404,11 @@ const HrApplicationsListScreen: React.FC = () => {
             <View style={styles.emptyContainer}>
               <Ionicons name="people-outline" size={48} color={COLORS.gray[300]} />
               <Text style={styles.emptyText}>Không có ứng viên</Text>
-              {status && (
+              {status ? (
                 <TouchableOpacity onPress={() => setStatus(undefined)}>
                   <Text style={styles.emptyAction}>Xem tất cả ứng viên</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           }
         />
@@ -527,10 +528,15 @@ const styles = StyleSheet.create({
     color: COLORS.gray[800],
     padding: 0,
   },
+  filterScrollView: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filterRow: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     gap: 6,
+    alignItems: 'center',
   },
   filterChip: {
     flexDirection: 'row',
@@ -563,9 +569,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingTop: 15,
     paddingBottom: 24,
-    flexGrow: 1,
   },
   card: {
     backgroundColor: COLORS.white,

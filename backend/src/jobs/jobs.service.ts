@@ -381,6 +381,11 @@ export class JobsService {
       logo: company.logo,
     }
 
+    // Fetch current job to compare description before updating
+    const currentJob = await this.jobModel.findById(id).lean();
+    const descriptionChanged = currentJob && updateJobDto.description !== undefined
+      && updateJobDto.description !== currentJob.description;
+
     await this.redisService.invalidateJobsCache();
 
     const result = await this.jobModel.updateOne(
@@ -394,20 +399,21 @@ export class JobsService {
       },
     );
 
-    // Re-process all CVs for this job when job details are updated
-    // This ensures AI matching scores are recalculated with new job requirements
-    const updatedJob = await this.jobModel.findById(id).populate('skills').lean();
-    if (updatedJob) {
-      const jobSkills = Array.isArray(updatedJob.skills)
-        ? updatedJob.skills.map((s: any) => typeof s === 'string' ? s : s.name)
-        : [];
-      
-      await this.cvProcessingService.reprocessAllCVsForJob(id, {
-        name: updatedJob.name,
-        description: updatedJob.description,
-        skills: jobSkills,
-        level: updatedJob.level,
-      });
+    // Re-process all CVs only when description has changed
+    if (descriptionChanged) {
+      const updatedJob = await this.jobModel.findById(id).populate('skills').lean();
+      if (updatedJob) {
+        const jobSkills = Array.isArray(updatedJob.skills)
+          ? updatedJob.skills.map((s: any) => typeof s === 'string' ? s : s.name)
+          : [];
+        
+        await this.cvProcessingService.reprocessAllCVsForJob(id, {
+          name: updatedJob.name,
+          description: updatedJob.description,
+          skills: jobSkills,
+          level: updatedJob.level,
+        });
+      }
     }
 
     return result;

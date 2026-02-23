@@ -216,7 +216,7 @@ npm run ios
 | Vai trò | Email | Mật khẩu |
 |---------|-------|----------|
 | Admin | admin@gmail.com | 123456 |
-| HR | hr1@company.com | 123456 |
+| HR | hr1@gmail.com | 123456 |
 | User | test@gmail.com | 123456 |
 
 ## API Documentation
