@@ -59,6 +59,19 @@ export class ApplicationsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HR)
+  @Get('by-job/:jobId/search-cv')
+  @ResponseMessage('Tìm kiếm ứng viên theo CV')
+  searchByCV(
+    @Param('jobId') jobId: string,
+    @Query('skills') skills: string,
+    @Query('education') education: string,
+    @User() user: IUser,
+  ) {
+    return this.applicationsService.searchByCV(jobId, { skills, education }, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.HR)
   @Get('by-job/:jobId/ai-rank')
   @ResponseMessage('Xếp hạng ứng viên bằng AI')
   getAIRankedCandidates(

@@ -15,6 +15,27 @@ export class UserCV {
   @Prop()
   description: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'OnlineCV' })
+  onlineCvId: mongoose.Schema.Types.ObjectId; // Reference to online CV if created via online builder
+
+  @Prop({ enum: ['pdf', 'docx', 'online'], default: 'pdf' })
+  fileType: string;
+
+  @Prop()
+  parsedText: string; // Raw text extracted from uploaded file
+
+  @Prop({ type: [String], default: [] })
+  skills: string[]; // Extracted skills keywords
+
+  @Prop({ type: [String], default: [] })
+  education: string[]; // Extracted education info
+
+  @Prop({ type: [String], default: [] })
+  experience: string[]; // Extracted work experience info
+
+  @Prop({ type: [String], default: [] })
+  certificates: string[]; // Extracted certificates/certifications
+
   @Prop({ default: false })
   isPrimary: boolean;
 

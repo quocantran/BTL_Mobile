@@ -38,6 +38,8 @@ const HrJobFormScreen: React.FC = () => {
   const [skillOptions, setSkillOptions] = useState<any[]>([]);
   const [skillModalVisible, setSkillModalVisible] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [skillSearch, setSkillSearch] = useState('');
+  const [creatingSkill, setCreatingSkill] = useState(false);
 
   useEffect(() => {
     if (jobData) {
@@ -171,6 +173,39 @@ const HrJobFormScreen: React.FC = () => {
     });
   };
 
+  // Filter skills by search query
+  const filteredSkillOptions = skillSearch.trim()
+    ? skillOptions.filter((s: any) => s.name?.toLowerCase().includes(skillSearch.trim().toLowerCase()))
+    : skillOptions;
+
+  const handleAddNewSkill = async () => {
+    const trimmedName = skillSearch.trim().toUpperCase();
+    if (!trimmedName) return;
+
+    // Check if skill already exists in options
+    const exists = skillOptions.some((s: any) => s.name === trimmedName);
+    if (exists) {
+      Alert.alert('Thông báo', 'Skill này đã tồn tại');
+      return;
+    }
+
+    setCreatingSkill(true);
+    try {
+      const res = await skillService.createSkill(trimmedName);
+      const newSkill = res.data;
+      // Add to available options and select it
+      setSkillOptions((prev) => [...prev, newSkill]);
+      setForm((prev) => ({ ...prev, skills: [...prev.skills, newSkill] }));
+      setSkillSearch('');
+      setErrors((p) => { const c = { ...p }; delete c.skills; return c; });
+      Alert.alert('Thành công', `Đã tạo skill "${trimmedName}"`);
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể tạo skill');
+    } finally {
+      setCreatingSkill(false);
+    }
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name || form.name.trim().length === 0) e.name = 'Tên công việc là bắt buộc';
@@ -264,11 +299,43 @@ const HrJobFormScreen: React.FC = () => {
         </View>
       </View>
 
-      <Modal visible={skillModalVisible} animationType="slide" onRequestClose={() => setSkillModalVisible(false)}>
+      <Modal visible={skillModalVisible} animationType="slide" onRequestClose={() => { setSkillModalVisible(false); setSkillSearch(''); }}>
         <View style={{ flex: 1, padding: 16, backgroundColor: COLORS.background }}>
           <Text style={{ fontWeight: '700', marginBottom: 12 }}>Chọn kỹ năng</Text>
+          
+          {/* Search input */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: COLORS.gray[200], paddingHorizontal: 12, marginBottom: 8 }}>
+            <TextInput
+              style={{ flex: 1, paddingVertical: 10 }}
+              value={skillSearch}
+              onChangeText={setSkillSearch}
+              placeholder="Tìm hoặc tạo skill mới..."
+              autoCapitalize="none"
+            />
+            {skillSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setSkillSearch('')}>
+                <Text style={{ color: COLORS.gray[400], fontSize: 18 }}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Add new skill button - shown when search doesn't match existing skills */}
+          {skillSearch.trim() &&
+            !skillOptions.some((s: any) => s.name?.toLowerCase() === skillSearch.trim().toLowerCase()) && (
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#e6f9ee', borderRadius: 8, marginBottom: 8 }}
+                onPress={handleAddNewSkill}
+                disabled={creatingSkill}
+              >
+                <Text style={{ color: COLORS.primary, fontSize: 18, marginRight: 8 }}>＋</Text>
+                <Text style={{ color: COLORS.primary, fontWeight: '600' }}>
+                  {creatingSkill ? 'Đang tạo...' : `Tạo skill mới: "${skillSearch.trim().toUpperCase()}"`}
+                </Text>
+              </TouchableOpacity>
+            )}
+
           <FlatList
-            data={skillOptions}
+            data={filteredSkillOptions}
             keyExtractor={(i, index) => String(i?._id ?? i?.name ?? i ?? index)}
             renderItem={({ item }) => {
               const selected = !!form.skills.find((s: any) => s._id === item._id || s.name === item.name);
@@ -281,7 +348,7 @@ const HrJobFormScreen: React.FC = () => {
             }}
           />
           <View style={{ marginTop: 12 }}>
-            <Button title="Xong" onPress={() => setSkillModalVisible(false)} />
+            <Button title="Xong" onPress={() => { setSkillModalVisible(false); setSkillSearch(''); }} />
           </View>
         </View>
       </Modal>

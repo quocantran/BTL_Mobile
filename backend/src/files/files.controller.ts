@@ -26,7 +26,7 @@ export class FilesController {
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({
-          fileType: /(jpg|jpeg|png|webp|pdf)$/,
+          fileType: /(pdf|msword|officedocument\.wordprocessingml|docx)$/,
         })
         .addMaxSizeValidator({
           maxSize: 5 * 1024 * 1024, // 5MB
@@ -37,7 +37,29 @@ export class FilesController {
     )
     file: Express.Multer.File,
   ) {
-    Logger.log(`Uploading file: ${file.originalname}, size: ${file.size} bytes`);
+    Logger.log(`Uploading CV file: ${file.originalname}, size: ${file.size} bytes, mime: ${file.mimetype}`);
     return this.filesService.uploadFile(file);
+  }
+
+  @Post('upload-image')
+  @Public()
+  @UseInterceptors(FileInterceptor('fileUpload'))
+  uploadImage(
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|gif|webp|bmp|svg\+xml)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 5 * 1024 * 1024, // 5MB
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+        }),
+    )
+    file: Express.Multer.File,
+  ) {
+    Logger.log(`Uploading image: ${file.originalname}, size: ${file.size} bytes, mime: ${file.mimetype}`);
+    return this.filesService.uploadImage(file);
   }
 }

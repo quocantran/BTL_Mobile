@@ -101,4 +101,47 @@ export class CompaniesController {
     return this.companiesService.getCompanyHrs(id);
   }
 
+  @Post('hr/create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  createCompanyByHr(@Body() createCompanyDto: CreateCompanyDto, @User() user: IUser) {
+    return this.companiesService.createCompanyByHr(createCompanyDto, user);
+  }
+
+  @Post(':id/request-join')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  requestJoinCompany(@Param('id') id: string, @User() user: IUser) {
+    return this.companiesService.requestJoinCompany(id, user);
+  }
+
+  @Post(':id/approve-hr/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  approveHrRequest(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @User() user: IUser,
+  ) {
+    return this.companiesService.approveHrRequest(id, userId, user);
+  }
+
+  @Post(':id/reject-hr/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  rejectHrRequest(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @User() user: IUser,
+  ) {
+    return this.companiesService.rejectHrRequest(id, userId, user);
+  }
+
+  @Get(':id/pending-hrs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR, Role.ADMIN)
+  getPendingHrs(@Param('id') id: string) {
+    return this.companiesService.getPendingHrs(id);
+  }
+
 }

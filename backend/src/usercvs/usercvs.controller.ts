@@ -11,10 +11,11 @@ import {
 import { UserCVsService } from './usercvs.service';
 import { CreateUserCVDto } from './dto/create-usercv.dto';
 import { UpdateUserCVDto } from './dto/update-usercv.dto';
-import { User, ResponseMessage } from 'src/decorator/customize';
+import { User, Roles, Role, ResponseMessage } from 'src/decorator/customize';
 import { IUser } from 'src/users/users.interface';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { RolesGuard } from 'src/guards/roles.guard';
 
 @Controller('user-cvs')
 @ApiTags('User CVs Controller')
@@ -72,5 +73,15 @@ export class UserCVsController {
   @ResponseMessage('Xóa CV thành công')
   remove(@Param('id') id: string, @User() user: IUser) {
     return this.userCVsService.remove(id, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin/user/:userId')
+  @ApiOperation({ summary: 'Get all CVs of a specific user (Admin only)' })
+  @ApiBearerAuth()
+  @ResponseMessage('Lấy danh sách CV của người dùng')
+  findByUserId(@Param('userId') userId: string) {
+    return this.userCVsService.findByUserId(userId);
   }
 }

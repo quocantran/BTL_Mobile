@@ -21,6 +21,15 @@ export class Company {
   usersFollow: mongoose.Schema.Types.ObjectId[];
 
   @Prop()
+  taxCode: string;
+
+  @Prop()
+  scale: string;
+
+  @Prop({ type: [{ userId: String, name: String, email: String, avatar: String, requestedAt: Date }], default: [] })
+  pendingHrs: { userId: string; name: string; email: string; avatar?: string; requestedAt: Date }[];
+
+  @Prop()
   updatedAt: Date;
 
   @Prop()

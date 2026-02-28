@@ -11,7 +11,6 @@ import {
   SafeAreaView,
   RefreshControl,
   Modal,
-  TextInput,
   FlatList,
   ActivityIndicator,
 } from "react-native";
@@ -22,7 +21,7 @@ import { Loading } from "../../../components/common/Loading";
 import { COLORS } from "../../../constants";
 import RenderHTML from "react-native-render-html";
 import { useNavigation } from "@react-navigation/native";
-import { ICompany } from "@/types";
+import { ICompany, ICompanyPendingHr } from "@/types";
 import { NativeStackNavigationProp } from "node_modules/@react-navigation/native-stack/lib/typescript/src/types";
 
 type HrStackParamList = {
@@ -45,12 +44,11 @@ const HrCompanyDetailScreen: React.FC = () => {
   const { width } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<HrStackParamList>>();
 
-  // HR management states
-  const [showHrModal, setShowHrModal] = useState(false);
-  const [hrSearchQuery, setHrSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<IHrUser[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [addingHr, setAddingHr] = useState<string | null>(null);
+  // Pending HR requests states
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingHrs, setPendingHrs] = useState<ICompanyPendingHr[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [processingHr, setProcessingHr] = useState<string | null>(null);
 
   const load = async () => {
     if (!companyId) return;
@@ -73,57 +71,17 @@ const HrCompanyDetailScreen: React.FC = () => {
 
   useEffect(() => {
     load();
+    loadPendingHrs();
     const unsubscribe = navigation.addListener('focus', () => {
       load();
+      loadPendingHrs();
     });
     return unsubscribe;
   }, [companyId, navigation]);
 
-  // Search HRs by name
-  const searchHrs = async (query: string) => {
-    setHrSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setSearchLoading(true);
-    try {
-      const res = await companyService.searchHrs(query, companyId);
-      setSearchResults(res.data || []);
-    } catch (err) {
-      console.error('Search HRs error:', err);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  // Add HR to company
-  const handleAddHr = async (hr: IHrUser) => {
-    if (!company) return;
-    const existingHrs: IHrUser[] = (company as any).hrs || [];
-    if (existingHrs.some((h) => h._id === hr._id)) {
-      Alert.alert('Thông báo', `${hr.name} đã tồn tại trong công ty`);
-      return;
-    }
-    setAddingHr(hr._id);
-    try {
-      await companyService.addHrToCompany(hr._id, company._id, company.name);
-      Alert.alert('Thành công', `Đã thêm ${hr.name} vào công ty`);
-      setShowHrModal(false);
-      setHrSearchQuery('');
-      setSearchResults([]);
-      load();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể thêm HR');
-    } finally {
-      setAddingHr(null);
-    }
-  };
-
   // Remove HR from company
   const handleRemoveHr = (hr: IHrUser) => {
     if (!company) return;
-    // Don't allow removing yourself
     if (hr._id === user?._id) {
       Alert.alert('Lỗi', 'Bạn không thể xóa chính mình khỏi công ty');
       return;
@@ -147,6 +105,74 @@ const HrCompanyDetailScreen: React.FC = () => {
           },
         },
       ]
+    );
+  };
+
+  // Load pending HR requests
+  const loadPendingHrs = async () => {
+    if (!companyId) return;
+    setPendingLoading(true);
+    try {
+      const res = await companyService.getPendingHrs(companyId);
+      setPendingHrs(res.data || []);
+    } catch (err) {
+      console.error('Load pending HRs error:', err);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  // Approve HR join request
+  const handleApproveHr = (hr: ICompanyPendingHr) => {
+    Alert.alert(
+      'Xác nhận duyệt',
+      `Bạn có chắc chắn muốn duyệt ${hr.name} vào công ty?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Duyệt',
+          onPress: async () => {
+            setProcessingHr(hr.userId);
+            try {
+              await companyService.approveHrRequest(companyId!, hr.userId);
+              Alert.alert('Thành công', `Đã duyệt ${hr.name} vào công ty`);
+              loadPendingHrs();
+              load();
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.response?.data?.message || 'Không thể duyệt yêu cầu');
+            } finally {
+              setProcessingHr(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Reject HR join request
+  const handleRejectHr = (hr: ICompanyPendingHr) => {
+    Alert.alert(
+      'Từ chối yêu cầu',
+      `Bạn có chắc chắn muốn từ chối ${hr.name}?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Từ chối',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingHr(hr.userId);
+            try {
+              await companyService.rejectHrRequest(companyId!, hr.userId);
+              Alert.alert('Đã từ chối', `Đã từ chối yêu cầu của ${hr.name}`);
+              loadPendingHrs();
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.response?.data?.message || 'Không thể từ chối yêu cầu');
+            } finally {
+              setProcessingHr(null);
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -282,16 +308,9 @@ const HrCompanyDetailScreen: React.FC = () => {
                 <View style={styles.infoCardHeader}>
                   <Ionicons name="people" size={20} color={COLORS.primary} />
                   <Text style={styles.infoCardTitle}>
-                    Quản lý HR ({(company as any).hrs?.length || 0})
+                    HR trong công ty ({(company as any).hrs?.length || 0})
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.addHrButton}
-                  onPress={() => setShowHrModal(true)}
-                >
-                  <Ionicons name="add" size={20} color={COLORS.white} />
-                  <Text style={styles.addHrButtonText}>Thêm HR</Text>
-                </TouchableOpacity>
               </View>
 
               {(company as any).hrs && (company as any).hrs.length > 0 ? (
@@ -330,6 +349,63 @@ const HrCompanyDetailScreen: React.FC = () => {
               )}
             </View>
 
+            {/* Pending HR Requests Section */}
+            <View style={styles.hrSection}>
+              <TouchableOpacity
+                style={styles.hrSectionHeader}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowPendingModal(true);
+                  loadPendingHrs();
+                }}
+              >
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="hourglass-outline" size={20} color={COLORS.warning || '#f59e0b'} />
+                  <Text style={styles.infoCardTitle}>
+                    Yêu cầu tham gia ({pendingHrs.length})
+                  </Text>
+                </View>
+                <View style={[styles.addHrButton, { backgroundColor: COLORS.warning || '#f59e0b' }]}>
+                  <Ionicons name="eye" size={18} color={COLORS.white} />
+                  <Text style={styles.addHrButtonText}>Xem</Text>
+                </View>
+              </TouchableOpacity>
+
+              {pendingHrs.length > 0 ? (
+                <View style={styles.pendingPreview}>
+                  {pendingHrs.slice(0, 3).map((hr) => (
+                    <View key={hr.userId} style={styles.pendingPreviewItem}>
+                      <View style={styles.hrAvatarContainer}>
+                        {hr.avatar ? (
+                          <Image source={{ uri: hr.avatar }} style={styles.hrAvatar} />
+                        ) : (
+                          <View style={[styles.hrAvatarPlaceholder, { backgroundColor: COLORS.warning || '#f59e0b' }]}>
+                            <Text style={styles.hrAvatarText}>
+                              {hr.name?.charAt(0).toUpperCase() || 'H'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.hrInfo}>
+                        <Text style={styles.hrName}>{hr.name}</Text>
+                        <Text style={styles.hrEmail}>{hr.email}</Text>
+                      </View>
+                      <View style={styles.pendingBadge}>
+                        <Text style={styles.pendingBadgeText}>Chờ duyệt</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {pendingHrs.length > 3 && (
+                    <Text style={styles.pendingMoreText}>
+                      +{pendingHrs.length - 3} yêu cầu khác
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>Không có yêu cầu tham gia nào</Text>
+              )}
+            </View>
+
             {/* Help Card */}
             <View style={styles.helpCard}>
               <Ionicons name="information-circle-outline" size={20} color={COLORS.info} />
@@ -341,80 +417,95 @@ const HrCompanyDetailScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Add HR Modal */}
+      {/* Pending HR Requests Modal */}
       <Modal
-        visible={showHrModal}
+        visible={showPendingModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowHrModal(false)}
+        onRequestClose={() => setShowPendingModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Thêm HR vào công ty</Text>
-              <TouchableOpacity onPress={() => {
-                setShowHrModal(false);
-                setHrSearchQuery('');
-                setSearchResults([]);
-              }}>
+              <Text style={styles.modalTitle}>Yêu cầu tham gia công ty</Text>
+              <TouchableOpacity onPress={() => setShowPendingModal(false)}>
                 <Ionicons name="close" size={24} color={COLORS.gray[600]} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.searchInputContainer}>
-              <Ionicons name="search" size={20} color={COLORS.gray[400]} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm kiếm HR theo tên..."
-                value={hrSearchQuery}
-                onChangeText={searchHrs}
-                autoFocus
-              />
-              {searchLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
-            </View>
-
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.searchResultItem}
-                  onPress={() => handleAddHr(item)}
-                  disabled={addingHr === item._id}
-                >
-                  <View style={styles.hrAvatarContainer}>
-                    {item.avatar ? (
-                      <Image source={{ uri: item.avatar }} style={styles.hrAvatar} />
-                    ) : (
-                      <View style={styles.hrAvatarPlaceholder}>
-                        <Text style={styles.hrAvatarText}>
-                          {item.name?.charAt(0).toUpperCase() || 'H'}
+            {pendingLoading ? (
+              <View style={styles.pendingLoadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.pendingLoadingText}>Đang tải...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={pendingHrs}
+                keyExtractor={(item) => item.userId}
+                renderItem={({ item }) => (
+                  <View style={styles.pendingHrItem}>
+                    <View style={styles.pendingHrTop}>
+                      <View style={styles.hrAvatarContainer}>
+                        {item.avatar ? (
+                          <Image source={{ uri: item.avatar }} style={styles.hrAvatar} />
+                        ) : (
+                          <View style={[styles.hrAvatarPlaceholder, { backgroundColor: COLORS.warning || '#f59e0b' }]}>
+                            <Text style={styles.hrAvatarText}>
+                              {item.name?.charAt(0).toUpperCase() || 'H'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.hrInfo}>
+                        <Text style={styles.hrName}>{item.name}</Text>
+                        <Text style={styles.hrEmail}>{item.email}</Text>
+                        <Text style={styles.pendingDate}>
+                          Yêu cầu lúc: {new Date(item.requestedAt).toLocaleDateString('vi-VN')}
                         </Text>
                       </View>
-                    )}
+                    </View>
+                    <View style={styles.pendingActions}>
+                      <TouchableOpacity
+                        style={styles.rejectButton}
+                        onPress={() => handleRejectHr(item)}
+                        disabled={processingHr === item.userId}
+                      >
+                        {processingHr === item.userId ? (
+                          <ActivityIndicator size="small" color={COLORS.danger} />
+                        ) : (
+                          <>
+                            <Ionicons name="close-circle-outline" size={18} color={COLORS.danger} />
+                            <Text style={styles.rejectButtonText}>Từ chối</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.approveButton}
+                        onPress={() => handleApproveHr(item)}
+                        disabled={processingHr === item.userId}
+                      >
+                        {processingHr === item.userId ? (
+                          <ActivityIndicator size="small" color={COLORS.white} />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
+                            <Text style={styles.approveButtonText}>Duyệt</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.hrInfo}>
-                    <Text style={styles.hrName}>{item.name}</Text>
-                    <Text style={styles.hrEmail}>{item.email}</Text>
-                  </View>
-                  {addingHr === item._id ? (
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                  ) : (
-                    <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                hrSearchQuery.length > 0 && !searchLoading ? (
+                )}
+                ListEmptyComponent={
                   <View style={styles.emptySearchContainer}>
-                    <Ionicons name="search-outline" size={48} color={COLORS.gray[300]} />
-                    <Text style={styles.emptySearchText}>Không tìm thấy HR nào</Text>
-                    <Text style={styles.emptySearchHint}>Chỉ tìm thấy HR chưa thuộc công ty khác</Text>
+                    <Ionicons name="checkmark-done-circle-outline" size={48} color={COLORS.gray[300]} />
+                    <Text style={styles.emptySearchText}>Không có yêu cầu nào</Text>
+                    <Text style={styles.emptySearchHint}>Tất cả yêu cầu tham gia đã được xử lý</Text>
                   </View>
-                ) : null
-              }
-              style={styles.searchResultsList}
-            />
+                }
+                style={styles.searchResultsList}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -730,30 +821,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.gray[800],
   },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.gray[50],
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: COLORS.gray[800],
-  },
   searchResultsList: {
     paddingHorizontal: 16,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
   },
   emptySearchContainer: {
     alignItems: 'center',
@@ -768,6 +837,96 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.gray[400],
     marginTop: 4,
+  },
+  // Pending HR Styles
+  pendingPreview: {
+    marginTop: 4,
+  },
+  pendingPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pendingBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#d97706',
+  },
+  pendingMoreText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingTop: 12,
+  },
+  pendingLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  pendingLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.gray[500],
+  },
+  pendingHrItem: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  pendingHrTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pendingDate: {
+    fontSize: 12,
+    color: COLORS.gray[400],
+    marginTop: 2,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingLeft: 57,
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+    gap: 6,
+  },
+  rejectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.danger,
+  },
+  approveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.success,
+    gap: 6,
+  },
+  approveButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.white,
   },
 });
 

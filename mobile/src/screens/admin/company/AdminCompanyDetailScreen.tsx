@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, Alert, TouchableOpacity, ScrollView, useWindowDimensions, Modal, TextInput, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, Image, StyleSheet, Alert, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { companyService } from '../../../services/companyService';
 import { ICompany } from '../../../types';
@@ -12,14 +12,6 @@ type AdminStackParamList = {
   CompanyDetail: { companyId: string };
 };
 
-interface IHrUser {
-  _id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  role?: string;
-}
-
 const AdminCompanyDetailScreen: React.FC = () => {
   const route = useRoute<RouteProp<AdminStackParamList, 'CompanyDetail'>>();
   const navigation = useNavigation();
@@ -27,13 +19,6 @@ const AdminCompanyDetailScreen: React.FC = () => {
   const [company, setCompany] = useState<ICompany | null>(null);
   const [loading, setLoading] = useState(false);
   const { width } = useWindowDimensions();
-
-  // HR management states
-  const [showHrModal, setShowHrModal] = useState(false);
-  const [hrSearchQuery, setHrSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<IHrUser[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [addingHr, setAddingHr] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,44 +36,8 @@ const AdminCompanyDetailScreen: React.FC = () => {
     load();
   }, [companyId]);
 
-  // Search HRs by name
-  const searchHrs = async (query: string) => {
-    setHrSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setSearchLoading(true);
-    try {
-      const res = await companyService.searchHrs(query, companyId);
-      setSearchResults(res.data || []);
-    } catch (err) {
-      console.error('Search HRs error:', err);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  // Add HR to company
-  const handleAddHr = async (hr: IHrUser) => {
-    if (!company) return;
-    setAddingHr(hr._id);
-    try {
-      await companyService.addHrToCompany(hr._id, company._id, company.name);
-      Alert.alert('Thành công', `Đã thêm ${hr.name} vào công ty`);
-      setShowHrModal(false);
-      setHrSearchQuery('');
-      setSearchResults([]);
-      load();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err.response?.data?.message || 'Không thể thêm HR');
-    } finally {
-      setAddingHr(null);
-    }
-  };
-
   // Remove HR from company
-  const handleRemoveHr = (hr: IHrUser) => {
+  const handleRemoveHr = (hr: any) => {
     if (!company) return;
     Alert.alert(
       'Xác nhận xóa',
@@ -166,17 +115,10 @@ const AdminCompanyDetailScreen: React.FC = () => {
                 )}
               </View>
 
-              {/* HR Management Section */}
+              {/* HR Section */}
               <View style={styles.hrSection}>
                 <View style={styles.hrSectionHeader}>
                   <Text style={styles.hrTitle}>HR của công ty ({company.hrs?.length || 0})</Text>
-                  <TouchableOpacity
-                    style={styles.addHrButton}
-                    onPress={() => setShowHrModal(true)}
-                  >
-                    <Ionicons name="add" size={18} color={COLORS.white} />
-                    <Text style={styles.addHrButtonText}>Thêm HR</Text>
-                  </TouchableOpacity>
                 </View>
                 {company.hrs && company.hrs.length > 0 ? (
                   company.hrs.map((hr) => (
@@ -224,84 +166,6 @@ const AdminCompanyDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* Add HR Modal */}
-        <Modal
-          visible={showHrModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowHrModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Thêm HR vào công ty</Text>
-                <TouchableOpacity onPress={() => {
-                  setShowHrModal(false);
-                  setHrSearchQuery('');
-                  setSearchResults([]);
-                }}>
-                  <Ionicons name="close" size={24} color={COLORS.gray[600]} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.searchInputContainer}>
-                <Ionicons name="search" size={20} color={COLORS.gray[400]} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Tìm kiếm HR theo tên..."
-                  value={hrSearchQuery}
-                  onChangeText={searchHrs}
-                  autoFocus
-                />
-                {searchLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
-              </View>
-
-              <FlatList
-                data={searchResults}
-                keyExtractor={(item) => item._id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.searchResultItem}
-                    onPress={() => handleAddHr(item)}
-                    disabled={addingHr === item._id}
-                  >
-                    <View style={styles.hrAvatarContainer}>
-                      {item.avatar ? (
-                        <Image source={{ uri: item.avatar }} style={styles.hrAvatar} />
-                      ) : (
-                        <View style={styles.hrAvatarPlaceholder}>
-                          <Text style={styles.hrAvatarText}>
-                            {item.name?.charAt(0).toUpperCase() || 'H'}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.hrInfo}>
-                      <Text style={styles.hrName}>{item.name}</Text>
-                      <Text style={styles.hrEmail}>{item.email}</Text>
-                    </View>
-                    {addingHr === item._id ? (
-                      <ActivityIndicator size="small" color={COLORS.primary} />
-                    ) : (
-                      <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  hrSearchQuery.length > 0 && !searchLoading ? (
-                    <View style={styles.emptySearchContainer}>
-                      <Ionicons name="search-outline" size={48} color={COLORS.gray[300]} />
-                      <Text style={styles.emptySearchText}>Không tìm thấy HR nào</Text>
-                      <Text style={styles.emptySearchHint}>Chỉ tìm thấy HR chưa thuộc công ty khác</Text>
-                    </View>
-                  ) : null
-                }
-                style={styles.searchResultsList}
-              />
-            </View>
-          </View>
-        </Modal>
       </View>
     );
 };
@@ -339,20 +203,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   hrTitle: { fontWeight: '700', fontSize: 16 },
-  addHrButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    gap: 4,
-  },
-  addHrButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   hrItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.gray[100] },
   hrAvatarContainer: {
     marginRight: 12,
@@ -383,73 +233,6 @@ const styles = StyleSheet.create({
   hrRole: { color: COLORS.gray[500], marginTop: 2 },
   removeHrButton: {
     padding: 4,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.gray[800],
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.gray[50],
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: COLORS.gray[800],
-  },
-  searchResultsList: {
-    paddingHorizontal: 16,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
-  },
-  emptySearchContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptySearchText: {
-    fontSize: 16,
-    color: COLORS.gray[500],
-    marginTop: 12,
-  },
-  emptySearchHint: {
-    fontSize: 13,
-    color: COLORS.gray[400],
-    marginTop: 4,
   },
 });
 

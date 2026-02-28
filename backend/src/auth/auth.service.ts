@@ -31,6 +31,10 @@ export class AuthService {
   async validateUser(username: string, pass: string): Promise<any> {
     const user = await this.usersService.findUserByUsername(username);
     if (user) {
+      // Check if user is locked
+      if (user.isLocked) {
+        return { isLocked: true, lockedReason: user.lockedReason };
+      }
       const isValid = this.usersService.checkPassword(pass, user.password);
       if (isValid) {
         return {
@@ -100,7 +104,7 @@ export class AuthService {
       secure: true,
     });
 
-    const userData = {
+    const userData: any = {
       _id,
       email,
       name,
@@ -111,8 +115,11 @@ export class AuthService {
       avatar: user.avatar,
     };
 
-    if (user.role === Role.HR && user.company) {
-      Object.assign(userData, { company: user.company });
+    if (user.role === Role.HR) {
+      if (user.company) {
+        userData.company = user.company;
+      }
+      userData.isApproved = user.isApproved !== false;
     }
 
     return {
@@ -214,19 +221,23 @@ export class AuthService {
   async handleAccount(user: IUser) {
     const currUser = await this.userModel.findOne({ _id: user._id });
 
-    return {
-      user: {
-        _id: currUser._id,
-        email: currUser.email,
-        name: currUser.name,
-        role: currUser.role,
-        company: currUser.company,
-        age: currUser.age,
-        address: currUser.address,
-        gender: currUser.gender,
-        avatar: currUser.avatar,
-      },
+    const userData: any = {
+      _id: currUser._id,
+      email: currUser.email,
+      name: currUser.name,
+      role: currUser.role,
+      company: currUser.company,
+      age: currUser.age,
+      address: currUser.address,
+      gender: currUser.gender,
+      avatar: currUser.avatar,
     };
+
+    if (currUser.role === Role.HR) {
+      userData.isApproved = (currUser as any).isApproved !== false;
+    }
+
+    return { user: userData };
   }
 
   generateNewToken = async (refreshToken: string, res: Response) => {
@@ -289,65 +300,60 @@ export class AuthService {
   async registerHr(createHrDto: CreateHrDto) {
     const {
       companyName,
-      companyDescription,
-      companyLogoUrl,
-      companyAddress,
+      taxCode,
+      companyScale,
       ...userDto
     } = createHrDto;
     userDto.role = Role.HR;
-    const user = await this.usersService.create(userDto as RegisterUserDto);
-    const companyData = {
-      name: companyName,
-      description: companyDescription,
-      logo: companyLogoUrl,
-      address: companyAddress,
-      isActive: false,
-    };
-    const companiesService = this.companiesService;
-    const company = await companiesService.createByHr(companyData, {
-      _id: new Types.ObjectId(user._id).toString(),
+
+    // Check email exists
+    const isExistEmail = await this.userModel.findOne({
       email: createHrDto.email,
-      name: createHrDto.name || '',
-      role: Role.HR,
-      age: createHrDto.age || 0,
-      address: createHrDto.address || '',
-      gender: createHrDto.gender || '',
-
     });
-    const updateUserDto = {
-      company: {
-        _id: company._id.toString(),
-        name: companyName,
-      },
-    };
-    await this.usersService.updateUserCompany(
-      user._id.toString(),
-      updateUserDto.company,
-    );
+    if (isExistEmail) {
+      throw new BadRequestException('Email already exists');
+    }
 
-    // Notify all admins with navigation target
+    // Create HR user with isApproved = false (pending admin approval)
+    const hashedPassword = this.usersService.hashPassword(userDto.password);
+    const registrationCompany =
+      companyName || taxCode || companyScale
+        ? { name: companyName || '', taxCode: taxCode || '', scale: companyScale || '' }
+        : undefined;
+
+    const newUser = await this.userModel.create({
+      ...userDto,
+      password: hashedPassword,
+      role: Role.HR,
+      isApproved: false,
+      ...(registrationCompany && { registrationCompany }),
+    });
+
+    // Notify all admins about new HR registration
     const admins = await this.userModel.find({
       role: Role.ADMIN,
       isDeleted: false,
     });
     if (admins && admins.length > 0) {
       const adminIds = admins.map((a) => a._id.toString());
-      const content = `Có người đã đăng ký làm HR cho công ty ${companyName}, duyệt công ty ngay!`;
+      const companyInfo = companyName ? ` - Công ty: ${companyName}` : '';
+      const taxInfo = taxCode ? ` - MST: ${taxCode}` : '';
+      const scaleInfo = companyScale ? ` - Quy mô: ${companyScale}` : '';
+      const content = `HR ${createHrDto.name} (${createHrDto.email}) đã đăng ký tài khoản${companyInfo}${taxInfo}${scaleInfo}. Vui lòng duyệt!`;
       await this.notificationsService.createBulk(
         adminIds,
         'Đăng ký HR mới',
         content,
-        NotificationType.COMPANY,
-        NotificationTargetType.COMPANY,
-        company._id.toString(), // targetId
-        { companyId: company._id.toString() },
+        NotificationType.SYSTEM,
+        NotificationTargetType.USER,
+        newUser._id.toString(),
+        { userId: newUser._id.toString(), companyName, taxCode, companyScale },
       );
     }
 
     return {
-      _id: user._id,
-      createdAt: user.createdAt,
-      company: companyData,
+      _id: newUser._id,
+      createdAt: newUser.createdAt,
     };
   }
 

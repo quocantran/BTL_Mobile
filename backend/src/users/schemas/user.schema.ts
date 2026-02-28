@@ -49,6 +49,25 @@ export class User {
   @Prop({ default: false })
   isDeleted: boolean;
 
+  @Prop({ default: false })
+  isLocked: boolean;
+
+  @Prop()
+  lockedAt: Date;
+
+  @Prop()
+  lockedReason: string;
+
+  @Prop({ default: true })
+  isApproved: boolean;
+
+  @Prop({ type: Object })
+  registrationCompany: {
+    name: string;
+    taxCode: string;
+    scale: string;
+  };
+
   @Prop()
   deletedAt: Date;
 

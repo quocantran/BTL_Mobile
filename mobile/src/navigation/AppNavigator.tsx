@@ -34,26 +34,47 @@ import MyCVsScreen from "../screens/profile/MyCVsScreen";
 import JobSubscriptionScreen from "../screens/profile/JobSubscriptionScreen";
 import MyApplicationsScreen from "../screens/profile/MyApplicationsScreen";
 import ChangePasswordScreen from "../screens/profile/ChangePasswordScreen";
+import CVTemplateSelectScreen from "../screens/profile/cv/CVTemplateSelectScreen";
+import CVFormScreen from "../screens/profile/cv/CVFormScreen";
 
 // Admin Screens
 import UsersListScreen from "../screens/admin/user/UsersListScreen";
 import UserDetailScreen from "../screens/admin/user/UserDetailScreen";
 import UserFormScreen from "../screens/admin/user/UserFormScreen";
+import CandidatesListScreen from "../screens/admin/candidate/CandidatesListScreen";
+import CandidateDetailScreen from "../screens/admin/candidate/CandidateDetailScreen";
 import RegisterHrScreen from "@/screens/auth/RegisterRrScreen";
 import AdminCompaniesListScreen from "@/screens/admin/company/AdminCompaniesListScreen";
 import AdminCompanyDetailScreen from "@/screens/admin/company/AdminCompanyDetailScreen";
 import HrCompanyDetailScreen from "../screens/hr/company/HrCompanyDetailScreen";
 import HrCompanyUpdateScreen from "../screens/hr/company/HrCompanyUpdateScreen";
+import HrNoCompanyScreen from "../screens/hr/company/HrNoCompanyScreen";
+import HrCreateCompanyScreen from "../screens/hr/company/HrCreateCompanyScreen";
+import HrJoinCompanyScreen from "../screens/hr/company/HrJoinCompanyScreen";
 import HrJobsListScreen from "../screens/hr/jobs/HrJobsListScreen";
 import HrJobDetailScreen from "../screens/hr/jobs/HrJobDetailScreen";
 import HrJobFormScreen from "../screens/hr/jobs/HrJobFormScreen";
+import HrPendingApprovalScreen from "../screens/hr/HrPendingApprovalScreen";
 import { CompanyDetailScreen } from "@/screens";
 import HrApplicationsListScreen from "../screens/hr/jobs/HrApplicationsListScreen";
 import HrApplicationDetailScreen from "../screens/hr/jobs/HrApplicationDetailScreen";
+import AdminPendingHrsScreen from "../screens/admin/hr/AdminPendingHrsScreen";
 import { ICompany, IJob, IUser } from '@/types';
 const HrTab = createBottomTabNavigator();
 
 const HrTabs = () => {
+  const { user } = useAppSelector((state) => state.auth);
+  const hasCompany = !!user?.company?._id;
+  const isApproved = user?.isApproved !== false;
+
+  // Determine which component to show for Company/Jobs tabs based on approval status
+  const companyComponent = !isApproved
+    ? HrPendingApprovalScreen
+    : hasCompany
+      ? HrCompanyDetailScreen
+      : HrNoCompanyScreen;
+  const jobsComponent = !isApproved ? HrPendingApprovalScreen : HrJobsListScreen;
+
   return (
     <HrTab.Navigator
 
@@ -99,12 +120,12 @@ const HrTabs = () => {
     >
       <HrTab.Screen
         name="HrCompany"
-        component={HrCompanyDetailScreen}
+        component={companyComponent}
         options={{ tabBarLabel: "Công ty" }}
       />
       <HrTab.Screen
         name="HrJobs"
-        component={HrJobsListScreen}
+        component={jobsComponent}
         options={{ tabBarLabel: "Việc làm" }}
       />
       <HrTab.Screen
@@ -143,10 +164,14 @@ export type RootStackParamList = {
   HrJobDetail: { job: any };
   HrJobForm: { job?: any };
   HrCompanyUpdate: undefined;
+  HrCreateCompany: undefined;
+  HrJoinCompany: undefined;
   ManageCompany: undefined;
   UsersList: undefined;
   UserDetail: { userId: string };
   UserForm: { userId?: string };
+  CandidatesList: undefined;
+  CandidateDetail: { userId: string };
   HrApplicationsList: { jobId: string };
   HrApplicationDetail: { applicationId: string };
   InterviewInvite: {
@@ -155,7 +180,8 @@ export type RootStackParamList = {
     company: ICompany | undefined;
     email: string;
   };
-  
+  CVTemplateSelect: undefined;
+  CVFormScreen: { templateType: string; cvId?: string };
 };
 
 export type MainTabParamList = {
@@ -170,6 +196,7 @@ export type AdminTabParamList = {
   Stats: undefined;
   Users: undefined;
   Companies: undefined;
+  PendingHrs: undefined;
   Jobs: undefined;
   Profile: undefined;
   Notifications: undefined;
@@ -361,6 +388,9 @@ const AdminTabs = () => {
             case "Companies":
               iconName = focused ? "business" : "business-outline";
               break;
+            case "PendingHrs":
+              iconName = focused ? "shield-checkmark" : "shield-checkmark-outline";
+              break;
             case "Jobs":
               iconName = focused ? "briefcase" : "briefcase-outline";
               break;
@@ -390,13 +420,18 @@ const AdminTabs = () => {
       <>
         <AdminTab.Screen
           name="Users"
-          component={UsersListScreen}
-          options={{ tabBarLabel: "Người dùng" }}
+          component={CandidatesListScreen}
+          options={{ tabBarLabel: "Ứng viên" }}
         />
         <AdminTab.Screen
           name="Companies"
           component={AdminCompaniesListScreen}
           options={{ tabBarLabel: "Công ty" }}
+        />
+        <AdminTab.Screen
+          name="PendingHrs"
+          component={AdminPendingHrsScreen}
+          options={{ tabBarLabel: "Duyệt HR" }}
         />
       </>
 
@@ -459,6 +494,16 @@ const AppNavigator = () => {
               options={{ headerShown: true, title: "Quản lý CV" }}
             />
             <Stack.Screen
+              name="CVTemplateSelect"
+              component={CVTemplateSelectScreen}
+              options={{ headerShown: true, title: "Chọn mẫu CV" }}
+            />
+            <Stack.Screen
+              name="CVFormScreen"
+              component={CVFormScreen}
+              options={{ headerShown: true, title: "Tạo CV online" }}
+            />
+            <Stack.Screen
               name="MyApplications"
               component={MyApplicationsScreen}
               options={{ headerShown: true, title: "Hồ sơ ứng tuyển" }}
@@ -482,6 +527,16 @@ const AppNavigator = () => {
               name="HrCompanyUpdate"
               component={HrCompanyUpdateScreen}
               options={{ headerShown: true, title: "Cập nhật công ty" }}
+            />
+            <Stack.Screen
+              name="HrCreateCompany"
+              component={HrCreateCompanyScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="HrJoinCompany"
+              component={HrJoinCompanyScreen}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="HrJobDetail"
@@ -553,6 +608,11 @@ const AppNavigator = () => {
               name="UserDetail"
               component={UserDetailScreen}
               options={{ headerShown: true, title: "Cập nhật người dùng" }}
+            />
+            <Stack.Screen
+              name="CandidateDetail"
+              component={CandidateDetailScreen}
+              options={{ headerShown: true, title: "Chi tiết ứng viên" }}
             />
             <Stack.Screen
               name="EditProfile"

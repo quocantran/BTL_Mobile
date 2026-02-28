@@ -11,4 +11,9 @@ export const skillService = {
     const response = await api.get(`/skills/${id}`);
     return response.data;
   },
+
+  async createSkill(name: string): Promise<IApiResponse<ISkill>> {
+    const response = await api.post('/skills', { name });
+    return response.data;
+  },
 };

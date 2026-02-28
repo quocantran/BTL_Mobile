@@ -8,7 +8,7 @@ import { CVMatchResult, CVMatchResultDocument, CVProcessingStatus } from './sche
 
 export interface CVProcessingJobData {
   cvMatchResultId: string;
-  cvUrl: string;
+  cvText: string; // Pre-parsed text from DB (no re-download needed)
   jobId: string;
   jobName: string;
   jobDescription: string;
@@ -28,7 +28,7 @@ export class CVProcessingProcessor {
 
   @Process('process-cv')
   async handleProcessCV(job: Job<CVProcessingJobData>) {
-    const { cvMatchResultId, cvUrl, jobName, jobDescription, jobSkills, jobLevel } = job.data;
+    const { cvMatchResultId, cvText, jobName, jobDescription, jobSkills, jobLevel } = job.data;
     
     this.logger.log(`Processing CV match: ${cvMatchResultId}`);
 
@@ -48,9 +48,9 @@ export class CVProcessingProcessor {
 
       const jdEmbedding = await this.aiMatchingService.generateEmbedding(jdText);
 
-      // 2. Match CV with JD
+      // 2. Match CV with JD using pre-parsed text (no file download needed)
       const matchResult = await this.aiMatchingService.matchCVWithJD(
-        cvUrl,
+        cvText,
         jdText,
         jdEmbedding,
         jobSkills,
@@ -92,6 +92,7 @@ export class CVProcessingProcessor {
   async handleReprocessCV(job: Job<{ cvMatchResultId: string }>) {
     const result = await this.cvMatchResultModel.findById(job.data.cvMatchResultId).populate([
       { path: 'jobId', select: 'name description skills level' },
+      { path: 'cvId', select: 'parsedText skills' },
     ]).lean() as any;
 
     if (!result || !result.jobId) {
@@ -99,9 +100,12 @@ export class CVProcessingProcessor {
       return;
     }
 
+    // Use pre-parsed text from UserCV or fallback to existing cvText
+    const cvText = result.cvId?.parsedText || result.cvText || '';
+
     const jobData: CVProcessingJobData = {
       cvMatchResultId: job.data.cvMatchResultId,
-      cvUrl: result.cvUrl,
+      cvText,
       jobId: result.jobId._id.toString(),
       jobName: result.jobId.name,
       jobDescription: result.jobId.description || '',

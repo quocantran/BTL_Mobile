@@ -91,8 +91,23 @@ const HrJobsListScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="business-outline" size={48} color={COLORS.gray[300]} />
-          <Text style={styles.errorText}>Không tìm thấy công ty của bạn</Text>
+          <View style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: COLORS.gray[50],
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 16,
+          }}>
+            <Ionicons name="business-outline" size={40} color={COLORS.gray[300]} />
+          </View>
+          <Text style={[styles.errorText, { fontSize: 18, fontWeight: '700', color: COLORS.gray[700] }]}>
+            Bạn chưa tham gia công ty nào
+          </Text>
+          <Text style={[styles.errorText, { fontSize: 14, color: COLORS.gray[400], marginTop: 8 }]}>
+            Hãy tạo hoặc tham gia công ty trong tab "Công ty" để bắt đầu đăng tin tuyển dụng
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -117,7 +132,7 @@ const HrJobsListScreen: React.FC = () => {
       onPress={() => navigation.navigate('HrJobDetail' as any, { job: item })}
       activeOpacity={0.7}
     >
-      <View style={styles.cardHeader}>>
+      <View style={styles.cardHeader}>
         <View style={styles.cardTitleContainer}>
           <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
           <View style={[

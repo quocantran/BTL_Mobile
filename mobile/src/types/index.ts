@@ -9,14 +9,31 @@ export interface IUser {
   password?: string;
   address?: string;
   role: 'USER' | 'HR' | 'ADMIN';
+  isLocked?: boolean;
+  isApproved?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   company?: {
     _id: string;
     name: string;
     logo?: string;
     isActive: boolean;
   };
+  registrationCompany?: {
+    name?: string;
+    taxCode?: string;
+    scale?: string;
+  };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ICompanyPendingHr {
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  requestedAt: string;
 }
 
 export interface ICompany {
@@ -25,10 +42,13 @@ export interface ICompany {
   logo?: string;
   address?: string;
   description?: string;
+  taxCode?: string;
+  scale?: string;
   isActive: boolean;
   followers?: string[];
   isFollowed?: boolean;
   jobCount?: number;
+  pendingHrs?: ICompanyPendingHr[];
   createdAt: string;
   updatedAt: string;
   hr?: IUser;
@@ -66,6 +86,13 @@ export interface IUserCV {
   title?: string;
   description?: string;
   isPrimary: boolean;
+  onlineCvId?: string; // Optional reference to online CV - if exists, CV was created online
+  fileType?: 'pdf' | 'docx' | 'online';
+  parsedText?: string;
+  skills?: string[];
+  education?: string[];
+  experience?: string[];
+  certificates?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -156,10 +183,9 @@ export interface IRegisterRequest {
 }
 
 export interface IRegisterByHrRequest extends IRegisterRequest {
-  companyName: string;
-  companyAddress: string;
-  companyLogoUrl: string;
-  companyDescription: string;
+  companyName?: string;
+  taxCode?: string;
+  companyScale?: string;
 }
 
 export interface IAuthResponse {
@@ -226,4 +252,20 @@ export interface ICreateSubscriberDto {
   skills: string[];
   newSkillNames?: string[];
   isActive?: boolean;
+}
+
+// CV Search Types
+export interface ICVSearchMatchInfo {
+  matchedSkills: string[];
+  matchedEducation: string[];
+  matchedInParsedText: boolean;
+}
+
+export interface ICVSearchResultItem extends IApplication {
+  matchInfo: ICVSearchMatchInfo;
+}
+
+export interface ICVSearchResponse {
+  total: number;
+  result: ICVSearchResultItem[];
 }

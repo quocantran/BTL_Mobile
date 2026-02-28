@@ -20,7 +20,7 @@ import { UsersService } from 'src/users/users.service';
 import { Role } from 'src/decorator/customize';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { CreateNotificationDto } from 'src/notifications/dto/create-notification.dto';
-import { NotificationType } from 'src/notifications/schemas/notification.schema';
+import { NotificationTargetType, NotificationType } from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class CompaniesService {
@@ -391,5 +391,196 @@ export class CompaniesService {
 
   async countCompanies() {
     return this.companyModel.countDocuments();
+  }
+
+  // HR requests to join a company
+  async requestJoinCompany(companyId: string, user: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      throw new NotFoundException('Company not found');
+    }
+
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) throw new NotFoundException('Company not found');
+
+    // Check if already a member
+    const hrsInCompany = await this.usersService.findAllByCompanyId(companyId);
+    if (hrsInCompany.some((hr) => hr._id.toString() === user._id.toString())) {
+      throw new BadRequestException('Bạn đã là thành viên của công ty này');
+    }
+
+    // Check if already pending
+    const pending = company.pendingHrs || [];
+    if (pending.some((p) => p.userId === user._id.toString())) {
+      throw new BadRequestException('Bạn đã gửi yêu cầu tham gia trước đó');
+    }
+
+    // Add to pending list
+    await this.companyModel.updateOne(
+      { _id: companyId },
+      {
+        $push: {
+          pendingHrs: {
+            userId: user._id.toString(),
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar || '',
+            requestedAt: new Date(),
+          },
+        },
+      },
+    );
+
+    // Notify all HRs in the company
+    if (hrsInCompany && hrsInCompany.length > 0) {
+      const hrIds = hrsInCompany.map((hr) => hr._id.toString());
+      const content = `${user.name} (${user.email}) muốn tham gia công ty ${company.name}. Hãy duyệt yêu cầu!`;
+      await this.notificationService.createBulk(
+        hrIds,
+        'Yêu cầu tham gia công ty',
+        content,
+        NotificationType.COMPANY,
+        NotificationTargetType.COMPANY,
+        companyId,
+        { companyId, requestUserId: user._id.toString() },
+      );
+    }
+
+    return { message: 'Đã gửi yêu cầu tham gia công ty. Vui lòng chờ duyệt!' };
+  }
+
+  // Approve HR join request
+  async approveHrRequest(companyId: string, userId: string, approver: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(companyId) || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid ID');
+    }
+
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const pending = company.pendingHrs || [];
+    const request = pending.find((p) => p.userId === userId);
+    if (!request) {
+      throw new BadRequestException('Không tìm thấy yêu cầu tham gia');
+    }
+
+    // Remove from pending list
+    await this.companyModel.updateOne(
+      { _id: companyId },
+      { $pull: { pendingHrs: { userId } } },
+    );
+
+    // Add user to company
+    await this.usersService.updateUserCompany(userId, {
+      _id: companyId,
+      name: company.name,
+    });
+
+    // Notify the requesting user
+    const content = `Bạn đã được duyệt tham gia công ty ${company.name}!`;
+    const notiObj = {
+      userId,
+      title: 'Đã được duyệt vào công ty',
+      content,
+      type: NotificationType.COMPANY,
+      targetType: 'company',
+      targetId: companyId,
+      data: { companyId },
+    };
+    await this.notificationService.create(notiObj as CreateNotificationDto);
+
+    return { message: `Đã duyệt ${request.name} vào công ty` };
+  }
+
+  // Reject HR join request
+  async rejectHrRequest(companyId: string, userId: string, approver: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(companyId) || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid ID');
+    }
+
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const pending = company.pendingHrs || [];
+    const request = pending.find((p) => p.userId === userId);
+    if (!request) {
+      throw new BadRequestException('Không tìm thấy yêu cầu tham gia');
+    }
+
+    // Remove from pending list
+    await this.companyModel.updateOne(
+      { _id: companyId },
+      { $pull: { pendingHrs: { userId } } },
+    );
+
+    // Notify the requesting user
+    const content = `Yêu cầu tham gia công ty ${company.name} đã bị từ chối.`;
+    const notiObj = {
+      userId,
+      title: 'Yêu cầu tham gia bị từ chối',
+      content,
+      type: NotificationType.COMPANY,
+      targetType: 'none',
+      data: { companyId },
+    };
+    await this.notificationService.create(notiObj as CreateNotificationDto);
+
+    return { message: `Đã từ chối yêu cầu của ${request.name}` };
+  }
+
+  // Get pending HR requests for a company
+  async getPendingHrs(companyId: string) {
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      throw new NotFoundException('Company not found');
+    }
+
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) throw new NotFoundException('Company not found');
+
+    return company.pendingHrs || [];
+  }
+
+  // Create company by HR (separate from registration)
+  async createCompanyByHr(createCompanyDto: CreateCompanyDto, user: IUser) {
+    const companyExist = await this.companyModel.findOne({
+      name: createCompanyDto.name,
+    });
+
+    if (companyExist) throw new BadRequestException('Tên công ty đã tồn tại');
+
+    const newCompany = await this.companyModel.create({
+      ...createCompanyDto,
+      isActive: false,
+      createdBy: {
+        _id: user._id,
+        email: user.email,
+      },
+    });
+
+    // Assign company to the HR user
+    await this.usersService.updateUserCompany(user._id.toString(), {
+      _id: newCompany._id.toString(),
+      name: newCompany.name,
+    });
+
+    await this.redisService.invalidateCompaniesCache();
+
+    // Notify all admins about the new company
+    const admins = await this.usersService.findAllAdmins();
+    if (admins && admins.length > 0) {
+      const adminIds = admins.map((admin) => admin._id.toString());
+      const title = 'Công ty mới được tạo';
+      const content = `Công ty: ${newCompany.name} đã được tạo bởi HR: ${user.name}. Duyệt ngay!`;
+      await this.notificationService.createBulk(
+        adminIds,
+        title,
+        content,
+        NotificationType.COMPANY,
+        NotificationTargetType.COMPANY,
+        newCompany._id.toString(),
+        { companyId: newCompany._id.toString() },
+      );
+    }
+
+    return newCompany;
   }
 }

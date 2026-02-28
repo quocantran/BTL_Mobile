@@ -202,59 +202,6 @@ export class UsersService {
     return await this.userModel.countDocuments();
   }
 
-  // Search for HR users by name (only users with HR role that don't belong to any company yet)
-  async searchHrsByName(name: string, excludeCompanyId?: string) {
-    const query: any = {
-      role: Role.HR,
-      isDeleted: false,
-    };
-
-    if (name) {
-      query.name = { $regex: name, $options: 'i' };
-    }
-
-    // Exclude HRs that already belong to a company (unless it's the same company)
-    if (excludeCompanyId) {
-      query.$or = [
-        { company: { $exists: false } },
-        { company: null },
-        { 'company._id': excludeCompanyId },
-      ];
-    } else {
-      query.$or = [
-        { company: { $exists: false } },
-        { company: null },
-      ];
-    }
-
-    const hrs = await this.userModel
-      .find(query)
-      .select('_id name email avatar')
-      .limit(20);
-
-    return hrs;
-  }
-
-  // Add HR to company
-  async addHrToCompany(hrId: string, companyId: string, companyName: string) {
-    const hr = await this.userModel.findOne({ _id: hrId, role: Role.HR, isDeleted: false });
-    if (!hr) {
-      throw new NotFoundException('HR not found or user is not an HR');
-    }
-
-    // Check if HR already belongs to another company
-    if (hr.company && hr.company._id.toString() !== companyId) {
-      throw new BadRequestException('HR đã thuộc về một công ty khác');
-    }
-
-    await this.userModel.updateOne(
-      { _id: hrId },
-      { company: { _id: companyId, name: companyName } },
-    );
-
-    return { message: 'Thêm HR vào công ty thành công' };
-  }
-
   // Remove HR from company
   async removeHrFromCompany(hrId: string, companyId: string) {
     const hr = await this.userModel.findOne({ _id: hrId, role: Role.HR, isDeleted: false });
@@ -272,5 +219,153 @@ export class UsersService {
     );
 
     return { message: 'Xóa HR khỏi công ty thành công' };
+  }
+
+  // Lock user account (Admin only)
+  async lockUser(userId: string, reason: string, adminUser: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const user = await this.userModel.findOne({ _id: userId, isDeleted: false });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    if (user.role === Role.ADMIN) {
+      throw new BadRequestException('Không thể khóa tài khoản Admin');
+    }
+
+    if (user.isLocked) {
+      throw new BadRequestException('Tài khoản này đã bị khóa');
+    }
+
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        isLocked: true,
+        lockedAt: new Date(),
+        lockedReason: reason || 'Vi phạm quy định của hệ thống',
+        updatedBy: {
+          _id: adminUser._id,
+          email: adminUser.email,
+        },
+      },
+    );
+
+    return { message: 'Khóa tài khoản thành công' };
+  }
+
+  // Unlock user account (Admin only)
+  async unlockUser(userId: string, adminUser: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const user = await this.userModel.findOne({ _id: userId, isDeleted: false });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    if (!user.isLocked) {
+      throw new BadRequestException('Tài khoản này chưa bị khóa');
+    }
+
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        isLocked: false,
+        lockedAt: null,
+        lockedReason: null,
+        updatedBy: {
+          _id: adminUser._id,
+          email: adminUser.email,
+        },
+      },
+    );
+
+    return { message: 'Mở khóa tài khoản thành công' };
+  }
+
+  // Approve HR account (Admin only)
+  async approveHr(userId: string, adminUser: IUser) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const user = await this.userModel.findOne({ _id: userId, isDeleted: false });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    if (user.role !== Role.HR) {
+      throw new BadRequestException('Người dùng không phải HR');
+    }
+
+    if (user.isApproved) {
+      throw new BadRequestException('Tài khoản HR đã được duyệt');
+    }
+
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        isApproved: true,
+        updatedBy: {
+          _id: adminUser._id,
+          email: adminUser.email,
+        },
+      },
+    );
+
+    return { message: 'Duyệt tài khoản HR thành công' };
+  }
+
+  // Get all admin users
+  async findAllAdmins() {
+    return await this.userModel
+      .find({ role: Role.ADMIN, isDeleted: false })
+      .select('-password -refreshToken');
+  }
+
+  // Get pending HR accounts (Admin only)
+  async findPendingHrs() {
+    return await this.userModel
+      .find({ role: Role.HR, isApproved: false, isDeleted: false })
+      .select('-password -refreshToken')
+      .sort({ createdAt: -1 });
+  }
+
+  // Get all candidates (USER role only) for Admin
+  async findAllCandidates(qs: any) {
+    const { filter, sort, population } = aqp(qs);
+    delete filter.current;
+    delete filter.pageSize;
+    
+    // Only get users with USER role
+    filter.role = Role.USER;
+    
+    const totalRecord = (await this.userModel.find(filter)).length;
+    const limit = qs.pageSize ? parseInt(qs.pageSize) : 10;
+    const totalPage = Math.ceil(totalRecord / limit);
+    const skip = (qs.current - 1) * limit;
+    const current = qs.current ? +qs.current : 1;
+    
+    const users = await this.userModel
+      .find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort(sort as any)
+      .select('-password -refreshToken')
+      .populate(population);
+
+    return {
+      meta: {
+        current: current,
+        pageSize: limit,
+        pages: totalPage,
+        total: totalRecord,
+      },
+      result: users,
+    };
   }
 }

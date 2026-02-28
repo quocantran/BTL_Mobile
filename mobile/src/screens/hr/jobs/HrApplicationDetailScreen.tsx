@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import ImageViewing from "react-native-image-viewing";
 import {
   View,
   Text,
@@ -50,7 +49,6 @@ const HrApplicationDetailScreen: React.FC = () => {
   const [application, setApplication] = useState<IApplication | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [cvPreviewVisible, setCvPreviewVisible] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<HrStackParamList>>();
 
   const load = async () => {
@@ -172,13 +170,6 @@ const HrApplicationDetailScreen: React.FC = () => {
   const currentStatusColor = STATUS_COLORS[application.status] || COLORS.gray[500];
   const currentStatusIcon = STATUS_ICONS[application.status] || 'help-circle-outline';
 
-  const isImageCV = cv?.url && (
-    cv.url.endsWith(".jpg") ||
-    cv.url.endsWith(".jpeg") ||
-    cv.url.endsWith(".png") ||
-    cv.url.endsWith(".webp")
-  );
-
   return (
     <>
       <SafeAreaView style={styles.container}>
@@ -255,7 +246,7 @@ const HrApplicationDetailScreen: React.FC = () => {
               {cv?.url && (
                 <TouchableOpacity
                   style={styles.viewCvBtn}
-                  onPress={() => isImageCV ? setCvPreviewVisible(true) : Linking.openURL(cv.url)}
+                  onPress={() => Linking.openURL(cv.url)}
                 >
                   <Ionicons name="eye-outline" size={16} color={COLORS.white} />
                   <Text style={styles.viewCvBtnText}>Xem CV</Text>
@@ -348,16 +339,6 @@ const HrApplicationDetailScreen: React.FC = () => {
           </View>
         </ScrollView>
       </SafeAreaView>
-      
-      {isImageCV && (
-        <ImageViewing
-          images={[{ uri: cv.url }]}
-          imageIndex={0}
-          visible={cvPreviewVisible}
-          onRequestClose={() => setCvPreviewVisible(false)}
-          presentationStyle="fullScreen"
-        />
-      )}
     </>
   );
 };

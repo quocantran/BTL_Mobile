@@ -61,7 +61,7 @@ export class MailService {
   }
 
   // Run every 1 minute for testing (change to CronExpression.EVERY_DAY_AT_8AM for production)
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async sendJobNotificationCron() {
     this.logger.log('Starting job notification cron job...');
 

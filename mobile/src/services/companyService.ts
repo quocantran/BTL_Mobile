@@ -77,21 +77,6 @@ export const companyService = {
     return response.data;
   },
 
-  // Search HRs by name for adding to company
-  async searchHrs(name: string, companyId?: string): Promise<IApiResponse<any[]>> {
-    const params = new URLSearchParams();
-    if (name) params.append('name', name);
-    if (companyId) params.append('companyId', companyId);
-    const response = await api.get(`/users/hrs/search?${params.toString()}`);
-    return response.data;
-  },
-
-  // Add HR to company
-  async addHrToCompany(hrId: string, companyId: string, companyName: string): Promise<IApiResponse<any>> {
-    const response = await api.post('/users/hrs/add-to-company', { hrId, companyId, companyName });
-    return response.data;
-  },
-
   // Remove HR from company
   async removeHrFromCompany(hrId: string, companyId: string): Promise<IApiResponse<any>> {
     const response = await api.post('/users/hrs/remove-from-company', { hrId, companyId });
@@ -104,4 +89,40 @@ export const companyService = {
     return response.data;
   },
 
+  // HR creates a new company
+  async createCompanyByHr(data: {
+    name: string;
+    description?: string;
+    address?: string;
+    logo?: string;
+    taxCode?: string;
+    scale?: string;
+  }): Promise<IApiResponse<any>> {
+    const response = await api.post('/companies/hr/create', data);
+    return response.data;
+  },
+
+  // HR requests to join an existing company
+  async requestJoinCompany(companyId: string): Promise<IApiResponse<any>> {
+    const response = await api.post(`/companies/${companyId}/request-join`);
+    return response.data;
+  },
+
+  // Approve HR join request
+  async approveHrRequest(companyId: string, userId: string): Promise<IApiResponse<any>> {
+    const response = await api.post(`/companies/${companyId}/approve-hr/${userId}`);
+    return response.data;
+  },
+
+  // Reject HR join request
+  async rejectHrRequest(companyId: string, userId: string): Promise<IApiResponse<any>> {
+    const response = await api.post(`/companies/${companyId}/reject-hr/${userId}`);
+    return response.data;
+  },
+
+  // Get pending HR requests for a company
+  async getPendingHrs(companyId: string): Promise<IApiResponse<any[]>> {
+    const response = await api.get(`/companies/${companyId}/pending-hrs`);
+    return response.data;
+  },
 };

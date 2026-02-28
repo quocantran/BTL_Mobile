@@ -108,7 +108,7 @@ const HrCompanyUpdateScreen: React.FC = () => {
       const maxRetries = 2;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          uploadResp = await api.post('/files/upload', uploadForm, {
+          uploadResp = await api.post('/files/upload-image', uploadForm, {
             headers: { 'Content-Type': 'multipart/form-data' },
             transformRequest: (data) => data,
             timeout: 60000,

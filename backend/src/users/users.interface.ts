@@ -12,4 +12,5 @@ export interface IUser {
     isActive: boolean;
   },
   avatar?: string;
+  isApproved?: boolean;
 }

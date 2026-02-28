@@ -1,5 +1,5 @@
 import api from './api';
-import { IApiResponse, IApplication, IPaginatedResponse, IAIRankingResponse } from '../types';
+import { IApiResponse, IApplication, IPaginatedResponse, IAIRankingResponse, ICVSearchResponse } from '../types';
 
 export interface ICreateApplicationDto {
   cvId: string;
@@ -58,6 +58,18 @@ export const applicationService = {
   // AI Ranking - Get top candidates ranked by AI matching
   async getAIRankedCandidates(jobId: string, topN: number = 10): Promise<IApiResponse<IAIRankingResponse>> {
     const response = await api.get(`/applications/by-job/${jobId}/ai-rank?topN=${topN}`);
+    return response.data;
+  },
+
+  // Search applications by CV content (skills, education)
+  async searchApplicationsByCV(
+    jobId: string,
+    params: { skills?: string; education?: string },
+  ): Promise<IApiResponse<ICVSearchResponse>> {
+    const queryParams = new URLSearchParams();
+    if (params.skills) queryParams.append('skills', params.skills);
+    if (params.education) queryParams.append('education', params.education);
+    const response = await api.get(`/applications/by-job/${jobId}/search-cv?${queryParams.toString()}`);
     return response.data;
   },
 };

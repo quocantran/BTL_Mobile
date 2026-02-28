@@ -1,9 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import Tesseract from 'tesseract.js';
+import axios from 'axios';
 
 // Dynamic import for @xenova/transformers (ESM module)
 let pipeline: any;
 let env: any;
+let pdfParse: any;
+let mammoth: any;
 
 @Injectable()
 export class AIMatchingService implements OnModuleInit {
@@ -15,6 +17,36 @@ export class AIMatchingService implements OnModuleInit {
   async onModuleInit() {
     // Preload the model on startup
     this.loadModel();
+    // Load pdf-parse and mammoth dynamically
+    this.loadPdfParser();
+    this.loadMammoth();
+  }
+
+  /**
+   * Load pdf-parse library dynamically
+   */
+  private async loadPdfParser(): Promise<void> {
+    try {
+      // Import internal module directly to avoid pdf-parse's self-test
+      // which tries to open test/data/05-versions-space.pdf on import
+      const pdfParseModule = (await import('pdf-parse/lib/pdf-parse.js'));
+      pdfParse = pdfParseModule.default || pdfParseModule;
+      this.logger.log('PDF parser loaded successfully');
+    } catch (error) {
+      this.logger.warn('pdf-parse not available, PDF processing will be limited');
+    }
+  }
+
+  /**
+   * Load mammoth library dynamically for DOCX parsing
+   */
+  private async loadMammoth(): Promise<void> {
+    try {
+      mammoth = await import('mammoth');
+      this.logger.log('Mammoth (DOCX parser) loaded successfully');
+    } catch (error) {
+      this.logger.warn('mammoth not available, DOCX processing will be limited');
+    }
   }
 
   /**
@@ -54,28 +86,192 @@ export class AIMatchingService implements OnModuleInit {
   }
 
   /**
-   * Extract text from image using Tesseract OCR
+   * Extract text from PDF file
    */
-  async extractTextFromImage(imageUrl: string): Promise<string> {
+  async extractTextFromPdf(pdfUrl: string): Promise<string> {
     try {
-      this.logger.log(`Extracting text from image: ${imageUrl}`);
+      this.logger.log(`Extracting text from PDF: ${pdfUrl}`);
       
-      const result = await Tesseract.recognize(imageUrl, 'vie+eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            this.logger.debug(`OCR Progress: ${Math.round(m.progress * 100)}%`);
-          }
-        },
-      });
+      if (!pdfParse) {
+        this.logger.log('pdfParse not loaded, attempting to load...');
+        await this.loadPdfParser();
+        if (!pdfParse) {
+          this.logger.error('pdf-parse library not available after retry');
+          return '';
+        }
+      }
+      
+      this.logger.log(`pdfParse type: ${typeof pdfParse}`);
 
-      const extractedText = result.data.text.trim();
-      this.logger.log(`Extracted ${extractedText.length} characters from image`);
+      // Download PDF file
+      this.logger.log('Downloading PDF...');
+      const response = await axios.get(pdfUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+      
+      this.logger.log(`Downloaded PDF, size: ${response.data.byteLength} bytes`);
+
+      const pdfBuffer = Buffer.from(response.data);
+      this.logger.log('Parsing PDF...');
+      const data = await pdfParse(pdfBuffer);
+      
+      const extractedText = data.text.trim();
+      this.logger.log(`Extracted ${extractedText.length} characters from PDF`);
+      
+      // Log first 200 chars for debugging
+      if (extractedText.length > 0) {
+        this.logger.log(`PDF text preview: ${extractedText.substring(0, 200)}...`);
+      } else {
+        this.logger.warn('PDF has no extractable text - may be image-based PDF');
+      }
       
       return extractedText;
     } catch (error) {
-      this.logger.error(`OCR failed for ${imageUrl}:`, error);
+      this.logger.error(`PDF extraction failed for ${pdfUrl}:`, error);
       return '';
     }
+  }
+
+  /**
+   * Extract text from DOCX file
+   */
+  async extractTextFromDocx(docxUrl: string): Promise<string> {
+    try {
+      this.logger.log(`Extracting text from DOCX: ${docxUrl}`);
+      
+      if (!mammoth) {
+        await this.loadMammoth();
+        if (!mammoth) {
+          this.logger.error('mammoth library not available');
+          return '';
+        }
+      }
+
+      // Download DOCX file
+      const response = await axios.get(docxUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+
+      const buffer = Buffer.from(response.data);
+      const result = await mammoth.extractRawText({ buffer });
+      const extractedText = result.value.trim();
+      
+      this.logger.log(`Extracted ${extractedText.length} characters from DOCX`);
+      return extractedText;
+    } catch (error) {
+      this.logger.error(`DOCX extraction failed for ${docxUrl}:`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Extract text from uploaded file (PDF or DOCX)
+   */
+  async extractTextFromFile(fileUrl: string): Promise<string> {
+    this.logger.log(`Processing CV URL: ${fileUrl}`);
+    
+    const cleanUrl = fileUrl.split('?')[0].split('#')[0].toLowerCase();
+    
+    if (cleanUrl.endsWith('.pdf')) {
+      return this.extractTextFromPdf(fileUrl);
+    } else if (cleanUrl.endsWith('.docx') || cleanUrl.endsWith('.doc')) {
+      return this.extractTextFromDocx(fileUrl);
+    }
+    
+    this.logger.warn(`Unsupported file type: ${fileUrl}`);
+    return '';
+  }
+
+  /**
+   * Section header keywords for extracting structured data from CV text
+   * Supports both English and Vietnamese
+   */
+  private readonly SECTION_KEYWORDS = {
+    skills: [
+      'skills', 'technical skills', 'professional skills', 'competencies', 'technologies',
+      'kỹ năng', 'kĩ năng', 'kỹ năng chuyên môn', 'kỹ năng kỹ thuật', 'công nghệ',
+      'kỹ năng mềm', 'hard skills', 'soft skills', 'tools', 'frameworks', 'programming',
+    ],
+    education: [
+      'education', 'academic', 'qualification', 'degree', 'university', 'school',
+      'học vấn', 'trình độ học vấn', 'bằng cấp', 'đào tạo', 'trường', 'đại học',
+      'trình độ', 'quá trình đào tạo', 'academic background',
+    ],
+    experience: [
+      'experience', 'work experience', 'employment', 'professional experience', 'career',
+      'kinh nghiệm', 'kinh nghiệm làm việc', 'kinh nghiệm nghề nghiệp', 'quá trình làm việc',
+      'lịch sử làm việc', 'dự án', 'projects', 'work history',
+    ],
+    certificates: [
+      'certificates', 'certifications', 'certification', 'license', 'licenses', 'awards',
+      'chứng chỉ', 'chứng nhận', 'giấy chứng nhận', 'giải thưởng', 'bằng', 'chứng nhận chuyên môn',
+      'achievements', 'thành tích', 'danh hiệu',
+    ],
+  };
+
+  /**
+   * Extract structured sections from CV text by detecting section headers
+   */
+  extractSectionsFromText(text: string): {
+    skills: string[];
+    education: string[];
+    experience: string[];
+    certificates: string[];
+  } {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const result = {
+      skills: [] as string[],
+      education: [] as string[],
+      experience: [] as string[],
+      certificates: [] as string[],
+    };
+
+    let currentSection: keyof typeof result | null = null;
+    let sectionContent: string[] = [];
+
+    const detectSection = (line: string): keyof typeof result | null => {
+      const lineLower = line.toLowerCase().replace(/[:\-–—•\|]/g, '').trim();
+      
+      for (const [section, keywords] of Object.entries(this.SECTION_KEYWORDS)) {
+        for (const keyword of keywords) {
+          // Check if the line is primarily a section header (short line with keyword)
+          if (lineLower === keyword || 
+              (lineLower.includes(keyword) && lineLower.length < keyword.length + 15)) {
+            return section as keyof typeof result;
+          }
+        }
+      }
+      return null;
+    };
+
+    const saveSectionContent = () => {
+      if (currentSection && sectionContent.length > 0) {
+        const content = sectionContent
+          .filter(l => l.length > 2) // Filter out tiny fragments
+          .map(l => l.replace(/^[\-•·▪►→◆●○■□]\s*/, '').trim()) // Remove bullet markers
+          .filter(l => l.length > 0);
+        result[currentSection].push(...content);
+      }
+      sectionContent = [];
+    };
+
+    for (const line of lines) {
+      const detectedSection = detectSection(line);
+      if (detectedSection) {
+        saveSectionContent();
+        currentSection = detectedSection;
+      } else if (currentSection) {
+        sectionContent.push(line);
+      }
+    }
+    // Save last section
+    saveSectionContent();
+
+    this.logger.log(`Extracted sections: skills=${result.skills.length}, education=${result.education.length}, experience=${result.experience.length}, certificates=${result.certificates.length}`);
+
+    return result;
   }
 
   /**
@@ -245,10 +441,11 @@ export class AIMatchingService implements OnModuleInit {
   }
 
   /**
-   * Match a single CV against JD
+   * Match a single CV against JD using pre-parsed CV text from DB
+   * No file download/parsing needed - uses data already extracted at upload time
    */
   async matchCVWithJD(
-    cvUrl: string,
+    cvText: string,
     jdText: string,
     jdEmbedding: number[],
     jobSkills: string[],
@@ -259,20 +456,17 @@ export class AIMatchingService implements OnModuleInit {
     missingSkills: string[];
     explanation: string;
   }> {
-    // 1. Extract text from CV image
-    const cvText = await this.extractTextFromImage(cvUrl);
-    
     if (!cvText || cvText.length < 50) {
       return {
-        cvText: '',
+        cvText: cvText || '',
         matchScore: 0,
         matchedSkills: [],
         missingSkills: jobSkills,
-        explanation: 'Không thể trích xuất nội dung từ CV',
+        explanation: 'Không đủ nội dung CV để phân tích',
       };
     }
 
-    // 2. Generate CV embedding
+    // 1. Generate CV embedding
     const cvEmbedding = await this.generateEmbedding(cvText);
     
     if (cvEmbedding.length === 0) {
@@ -285,16 +479,16 @@ export class AIMatchingService implements OnModuleInit {
       };
     }
 
-    // 3. Calculate semantic similarity
+    // 2. Calculate semantic similarity
     const semanticScore = this.cosineSimilarity(jdEmbedding, cvEmbedding);
 
-    // 4. Extract skills match
+    // 3. Extract skills match
     const { matchedSkills, missingSkills } = this.extractSkillsFromText(cvText, jobSkills);
 
-    // 5. Calculate final score with improved algorithm
+    // 4. Calculate final score with improved algorithm
     const matchScore = this.calculateMatchScore(semanticScore, matchedSkills, jobSkills);
 
-    // 6. Generate explanation
+    // 5. Generate explanation
     const explanation = this.generateExplanation(matchScore, matchedSkills, missingSkills);
 
     this.logger.log(`CV Match: semantic=${semanticScore.toFixed(3)}, skills=${matchedSkills.length}/${jobSkills.length}, final=${matchScore.toFixed(3)}`);

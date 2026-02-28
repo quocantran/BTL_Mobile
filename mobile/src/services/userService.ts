@@ -27,7 +27,7 @@ export const userService = {
   },
 
   async uploadAvatar(formData: FormData): Promise<IApiResponse<{ url: string }>> {
-    const response = await api.post('/files/upload', formData, {
+    const response = await api.post('/files/upload-image', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

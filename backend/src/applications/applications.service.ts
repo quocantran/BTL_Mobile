@@ -88,18 +88,40 @@ export class ApplicationsService {
     });
 
     // Queue CV processing for AI matching (async - returns immediately)
-    const isImage = /\.(jpg|jpeg|png|webp)$/i.test(cv.url);
-    if (isImage) {
-      try {
-        const jobSkills = Array.isArray(job.skills)
-          ? job.skills.map((s: any) => typeof s === 'string' ? s : s.name)
-          : [];
+    // Use pre-parsed text from UserCV - no need to re-download/parse file
+    try {
+      const jobSkills = Array.isArray(job.skills)
+        ? job.skills.map((s: any) => typeof s === 'string' ? s : s.name)
+        : [];
 
+      // Build CV text from DB data:
+      // For uploaded CVs: use parsedText stored during upload
+      // For online CVs: build text from structured data
+      let cvText = '';
+      const cvDoc = cv as any;
+      
+      if (cvDoc.parsedText) {
+        // Uploaded CV - use pre-parsed text
+        cvText = cvDoc.parsedText;
+      } else if (cvDoc.onlineCvId) {
+        // Online CV - build text from structured fields
+        const parts = [
+          cvDoc.skills?.length ? `Skills: ${cvDoc.skills.join(', ')}` : '',
+          cvDoc.education?.length ? `Education: ${cvDoc.education.join('. ')}` : '',
+          cvDoc.experience?.length ? `Experience: ${cvDoc.experience.join('. ')}` : '',
+          cvDoc.certificates?.length ? `Certificates: ${cvDoc.certificates.join(', ')}` : '',
+          cvDoc.description || '',
+        ];
+        cvText = parts.filter(Boolean).join('\n');
+      }
+
+      if (cvText && cvText.length > 10) {
         await this.cvProcessingService.queueCVProcessing({
           cvId: cv._id.toString(),
           userId: user._id,
           applicationId: application._id.toString(),
           cvUrl: cv.url,
+          cvText,
           job: {
             _id: job._id.toString(),
             name: job.name,
@@ -109,10 +131,12 @@ export class ApplicationsService {
           },
         });
         console.log('CV processing queued for application:', application._id);
-      } catch (error) {
-        console.error('Failed to queue CV processing:', error);
-        // Don't fail the application creation if queuing fails
+      } else {
+        console.log('CV has no parsed text, skipping AI matching for:', application._id);
       }
+    } catch (error) {
+      console.error('Failed to queue CV processing:', error);
+      // Don't fail the application creation if queuing fails
     }
 
     const applicationInDb = await this.applicationModel.findById(application._id)
@@ -481,5 +505,168 @@ export class ApplicationsService {
       processedAt: new Date().toISOString(),
       processingStatus, // Additional field for UI to show processing progress
     } as IAIRankingResponse;
+  }
+
+  /**
+   * Search applications by CV content (skills, education)
+   * Searches both structured UserCV fields and parsedText
+   */
+  async searchByCV(
+    jobId: string,
+    query: { skills?: string; education?: string },
+    user: IUser,
+  ) {
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      throw new BadRequestException('Job ID không hợp lệ');
+    }
+
+    const skillKeywords = query.skills
+      ? query.skills.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+    const educationKeyword = query.education?.trim() || '';
+
+    if (skillKeywords.length === 0 && !educationKeyword) {
+      throw new BadRequestException('Vui lòng nhập ít nhất một tiêu chí tìm kiếm (skills hoặc education)');
+    }
+
+    // Build $or conditions to match in UserCV structured fields AND parsedText
+    const cvOrConditions: any[] = [];
+
+    if (skillKeywords.length > 0) {
+      // Escape regex special chars
+      const skillRegexes = skillKeywords.map(
+        s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      );
+
+      // Match in UserCV.skills array
+      cvOrConditions.push({ 'cv.skills': { $in: skillRegexes } });
+
+      // Match in UserCV.parsedText
+      const skillsPattern = skillKeywords
+        .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+      cvOrConditions.push({
+        'cv.parsedText': { $regex: skillsPattern, $options: 'i' },
+      });
+    }
+
+    if (educationKeyword) {
+      const escapedEdu = educationKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Match in UserCV.education array
+      cvOrConditions.push({
+        'cv.education': { $elemMatch: { $regex: escapedEdu, $options: 'i' } },
+      });
+
+      // Match in UserCV.parsedText
+      cvOrConditions.push({
+        'cv.parsedText': { $regex: escapedEdu, $options: 'i' },
+      });
+    }
+
+    const pipeline: any[] = [
+      // 1. Match applications for this job
+      {
+        $match: {
+          jobId: new mongoose.Types.ObjectId(jobId),
+          isDeleted: false,
+        },
+      },
+      // 2. Lookup UserCV
+      {
+        $lookup: {
+          from: 'usercvs',
+          localField: 'cvId',
+          foreignField: '_id',
+          as: 'cv',
+        },
+      },
+      { $unwind: '$cv' },
+      // 3. Filter by CV content
+      { $match: { $or: cvOrConditions } },
+      // 4. Lookup User info
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      // 5. Project needed fields
+      {
+        $project: {
+          _id: 1,
+          status: 1,
+          coverLetter: 1,
+          createdAt: 1,
+          cvId: {
+            _id: '$cv._id',
+            url: '$cv.url',
+            title: '$cv.title',
+            skills: '$cv.skills',
+            education: '$cv.education',
+            fileType: '$cv.fileType',
+          },
+          userId: {
+            _id: '$user._id',
+            name: '$user.name',
+            email: '$user.email',
+            avatar: '$user.avatar',
+          },
+        },
+      },
+      // 6. Sort by createdAt desc
+      { $sort: { createdAt: -1 as const } },
+    ];
+
+    const results = await this.applicationModel.aggregate(pipeline);
+
+    // Enrich results with match details
+    const enrichedResults = results.map(app => {
+      const matchedSkills: string[] = [];
+      const matchedEducation: string[] = [];
+      let matchedInParsedText = false;
+
+      if (skillKeywords.length > 0 && app.cvId?.skills?.length) {
+        for (const skill of app.cvId.skills) {
+          if (
+            skillKeywords.some(kw =>
+              skill.toLowerCase().includes(kw.toLowerCase()),
+            )
+          ) {
+            matchedSkills.push(skill);
+          }
+        }
+      }
+
+      if (educationKeyword && app.cvId?.education?.length) {
+        for (const edu of app.cvId.education) {
+          if (edu.toLowerCase().includes(educationKeyword.toLowerCase())) {
+            matchedEducation.push(edu);
+          }
+        }
+      }
+
+      // Check if match came from parsedText (no structured match found)
+      if (matchedSkills.length === 0 && matchedEducation.length === 0) {
+        matchedInParsedText = true;
+      }
+
+      return {
+        ...app,
+        matchInfo: {
+          matchedSkills,
+          matchedEducation,
+          matchedInParsedText,
+        },
+      };
+    });
+
+    return {
+      total: enrichedResults.length,
+      result: enrichedResults,
+    };
   }
 }

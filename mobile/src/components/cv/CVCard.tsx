@@ -1,14 +1,26 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../../constants';
 import { IUserCV } from '../../types';
+
+/**
+ * Determine file type icon and label
+ */
+const getFileTypeInfo = (url: string): { icon: string; label: string; color: string } => {
+  if (!url) return { icon: 'document-text', label: '', color: '#4A90D9' };
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.endsWith('.pdf')) return { icon: 'document', label: 'PDF', color: '#E53E3E' };
+  if (lowerUrl.endsWith('.docx') || lowerUrl.endsWith('.doc')) return { icon: 'document-text', label: 'DOCX', color: '#2B6CB0' };
+  return { icon: 'document-text', label: '', color: '#4A90D9' };
+};
 
 interface CVCardProps {
   cv: IUserCV;
   onPress: () => void;
   onSetPrimary?: () => void;
   onDelete?: () => void;
+  onEdit?: () => void;
   showActions?: boolean;
 }
 
@@ -17,18 +29,22 @@ export const CVCard: React.FC<CVCardProps> = ({
   onPress,
   onSetPrimary,
   onDelete,
+  onEdit,
   showActions = true,
 }) => {
+  const fileType = getFileTypeInfo(cv.url);
+  
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.imageContainer}>
-        {cv.url ? (
-          <Image source={{ uri: cv.url }} style={styles.thumbnail} resizeMode="cover" />
-        ) : (
-          <View style={styles.iconContainer}>
-            <Ionicons name="document-text" size={32} color={COLORS.primary} />
-          </View>
-        )}
+        <View style={[styles.iconContainer, { backgroundColor: fileType.color + '10' }]}>
+          <Ionicons 
+            name={fileType.icon as any} 
+            size={32} 
+            color={fileType.color} 
+          />
+          {fileType.label ? <Text style={[styles.pdfLabel, { color: fileType.color }]}>{fileType.label}</Text> : null}
+        </View>
         {cv.isPrimary && (
           <View style={styles.primaryBadge}>
             <Ionicons name="star" size={12} color={COLORS.warning} />
@@ -52,6 +68,11 @@ export const CVCard: React.FC<CVCardProps> = ({
 
       {showActions && (
         <View style={styles.actions}>
+          {onEdit && (
+            <TouchableOpacity style={styles.actionButton} onPress={onEdit}>
+              <Ionicons name="create-outline" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
           {!cv.isPrimary && onSetPrimary && (
             <TouchableOpacity style={styles.actionButton} onPress={onSetPrimary}>
               <Ionicons name="star-outline" size={20} color={COLORS.warning} />
@@ -89,19 +110,17 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: COLORS.gray[100],
-  },
   iconContainer: {
     width: 60,
     height: 60,
-    backgroundColor: COLORS.primary + '10',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pdfLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 2,
   },
   primaryBadge: {
     position: 'absolute',

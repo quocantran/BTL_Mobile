@@ -25,7 +25,7 @@ export class SkillsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.HR)
   create(@Body() createSkillDto: CreateSkillDto, @User() user: IUser) {
     return this.skillsService.create(createSkillDto, user);
   }

@@ -12,4 +12,13 @@ export class CreateCompanyDto {
 
   @IsOptional()
   logo?: string;
+
+  @IsOptional()
+  taxCode?: string;
+
+  @IsOptional()
+  scale?: string;
+
+  @IsOptional()
+  isActive?: boolean;
 }

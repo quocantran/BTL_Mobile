@@ -20,12 +20,14 @@ export class CVProcessingService {
 
   /**
    * Queue CV processing when an application is created
+   * Uses pre-parsed CV text from DB (no file download needed)
    */
   async queueCVProcessing(params: {
     cvId: string;
     userId: string;
     applicationId: string;
     cvUrl: string;
+    cvText: string; // Pre-parsed text from UserCV
     job: {
       _id: string;
       name: string;
@@ -34,7 +36,7 @@ export class CVProcessingService {
       level?: string;
     };
   }): Promise<CVMatchResult> {
-    const { cvId, userId, applicationId, cvUrl, job } = params;
+    const { cvId, userId, applicationId, cvUrl, cvText, job } = params;
 
     // Check if already exists
     const existing = await this.cvMatchResultModel.findOne({
@@ -76,7 +78,7 @@ export class CVProcessingService {
     // Add to queue
     const jobData: CVProcessingJobData = {
       cvMatchResultId: cvMatchResult._id.toString(),
-      cvUrl,
+      cvText, // Use pre-parsed text from DB
       jobId: job._id,
       jobName: job.name,
       jobDescription: job.description || '',
@@ -237,7 +239,7 @@ export class CVProcessingService {
 
       const jobProcessingData: CVProcessingJobData = {
         cvMatchResultId: result._id.toString(),
-        cvUrl: result.cvUrl,
+        cvText: result.cvText || '', // Use existing parsed text
         jobId: jobId,
         jobName: jobData.name,
         jobDescription: jobData.description || '',
@@ -292,7 +294,7 @@ export class CVProcessingService {
 
       const jobProcessingData: CVProcessingJobData = {
         cvMatchResultId: result._id.toString(),
-        cvUrl,
+        cvText: result.cvText || '', // Use existing parsed text
         jobId: job._id.toString(),
         jobName: job.name,
         jobDescription: job.description || '',

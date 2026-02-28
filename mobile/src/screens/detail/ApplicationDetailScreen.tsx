@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import ImageViewing from 'react-native-image-viewing';
 import {
   View,
   Text,
@@ -9,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
-  Image,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -66,17 +64,12 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
     }
   };
 
-  const [cvPreviewVisible, setCvPreviewVisible] = useState(false);
-  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [withdrawing, setWithdrawing] = useState(false);
 
   const handleViewCV = () => {
     const cvData = application?.cvId || application?.cv;
     const cv = typeof cvData === 'object' ? cvData : null;
-    if (cv?.url && (cv.url.endsWith('.jpg') || cv.url.endsWith('.jpeg') || cv.url.endsWith('.png') || cv.url.endsWith('.webp'))) {
-      setCvPreviewUrl(cv.url);
-      setCvPreviewVisible(true);
-    } else if (cv?.url) {
+    if (cv?.url) {
       Linking.openURL(cv.url);
     } else {
       Alert.alert('Thông báo', 'Không thể xem CV');
@@ -173,13 +166,12 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>CV đã nộp</Text>
           <TouchableOpacity style={styles.cvCard} onPress={handleViewCV}>
-            {cv?.url ? (
-              <Image source={{ uri: cv.url }} style={styles.cvThumb} />
-            ) : (
-              <View style={styles.cvIcon}>
-                <Ionicons name="document-text" size={28} color={COLORS.primary} />
-              </View>
-            )}
+            <View style={styles.cvIcon}>
+              <Ionicons name={cv?.url?.toLowerCase().endsWith('.docx') || cv?.url?.toLowerCase().endsWith('.doc') ? 'document-text' : 'document'} size={28} color={cv?.url?.toLowerCase().endsWith('.docx') || cv?.url?.toLowerCase().endsWith('.doc') ? '#2B6CB0' : '#E53E3E'} />
+              <Text style={{ fontSize: 8, fontWeight: '700', color: cv?.url?.toLowerCase().endsWith('.docx') || cv?.url?.toLowerCase().endsWith('.doc') ? '#2B6CB0' : '#E53E3E', marginTop: 2 }}>
+                {cv?.url?.toLowerCase().endsWith('.docx') || cv?.url?.toLowerCase().endsWith('.doc') ? 'DOCX' : 'PDF'}
+              </Text>
+            </View>
             <View style={styles.cvInfo}>
               <Text style={styles.cvName}>{cv?.title || 'CV'}</Text>
               <Text style={styles.cvDate}>
@@ -189,15 +181,6 @@ const ApplicationDetailScreen: React.FC<ApplicationDetailScreenProps> = ({
             <Ionicons name="open-outline" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
-        {cvPreviewUrl && (
-          <ImageViewing
-            images={[{ uri: cvPreviewUrl }]}
-            imageIndex={0}
-            visible={cvPreviewVisible}
-            onRequestClose={() => setCvPreviewVisible(false)}
-            presentationStyle="fullScreen"
-          />
-        )}
 
         {/* Timeline */}
         <View style={styles.section}>
@@ -351,12 +334,6 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: COLORS.gray[50],
     borderRadius: SIZES.radius,
-  },
-  cvThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: COLORS.gray[100],
   },
   cvIcon: {
     width: 48,

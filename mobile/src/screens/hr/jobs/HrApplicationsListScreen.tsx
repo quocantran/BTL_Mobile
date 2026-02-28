@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,12 +12,13 @@ import {
   SafeAreaView,
   RefreshControl,
   TextInput,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { APPLICATION_STATUS, COLORS } from "../../../constants";
 import { applicationService } from "../../../services/applicationService";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { IApplication, ICandidateMatchResult } from "../../../types";
+import { IApplication, ICandidateMatchResult, ICVSearchResultItem } from "../../../types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 
@@ -214,6 +215,15 @@ const HrApplicationsListScreen: React.FC = () => {
   const [aiJobName, setAiJobName] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // CV Search states
+  const [cvSearchModalVisible, setCvSearchModalVisible] = useState(false);
+  const [cvSearchLoading, setCvSearchLoading] = useState(false);
+  const [cvSearchResults, setCvSearchResults] = useState<ICVSearchResultItem[]>([]);
+  const [cvSearchActive, setCvSearchActive] = useState(false);
+  const [skillInput, setSkillInput] = useState('');
+  const [skillTags, setSkillTags] = useState<string[]>([]);
+  const [educationInput, setEducationInput] = useState('');
+
   // Calculate status counts
   const getStatusCounts = () => {
     const counts: Record<string, number> = { ALL: allApplications.length };
@@ -261,6 +271,51 @@ const HrApplicationsListScreen: React.FC = () => {
     }
   };
 
+  // Add skill tag
+  const addSkillTag = useCallback(() => {
+    const tag = skillInput.trim();
+    if (tag && !skillTags.includes(tag)) {
+      setSkillTags(prev => [...prev, tag]);
+    }
+    setSkillInput('');
+  }, [skillInput, skillTags]);
+
+  // Remove skill tag
+  const removeSkillTag = useCallback((tag: string) => {
+    setSkillTags(prev => prev.filter(t => t !== tag));
+  }, []);
+
+  // Execute CV search
+  const executeCvSearch = async () => {
+    if (skillTags.length === 0 && !educationInput.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập ít nhất một tiêu chí tìm kiếm (skills hoặc education)');
+      return;
+    }
+
+    setCvSearchLoading(true);
+    try {
+      const res = await applicationService.searchApplicationsByCV(jobId, {
+        skills: skillTags.length > 0 ? skillTags.join(',') : undefined,
+        education: educationInput.trim() || undefined,
+      });
+      setCvSearchResults(res.data.result || []);
+      setCvSearchActive(true);
+      setCvSearchModalVisible(false);
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.response?.data?.message || 'Không thể tìm kiếm');
+    } finally {
+      setCvSearchLoading(false);
+    }
+  };
+
+  // Clear CV search
+  const clearCvSearch = useCallback(() => {
+    setCvSearchActive(false);
+    setCvSearchResults([]);
+    setSkillTags([]);
+    setEducationInput('');
+  }, []);
+
   useEffect(() => {
     load();
   }, [jobId]);
@@ -283,11 +338,12 @@ const HrApplicationsListScreen: React.FC = () => {
 
   const statusCounts = getStatusCounts();
 
-  const renderItem = ({ item }: { item: IApplication }) => {
+  const renderItem = ({ item }: { item: IApplication | ICVSearchResultItem }) => {
     const user = typeof item.userId === 'object' && item.userId !== null ? item.userId : undefined;
     const cv = typeof item.cvId === 'object' && item.cvId !== null ? item.cvId : undefined;
     const statusColor = STATUS_COLORS[item.status] || COLORS.gray[500];
     const statusIcon = STATUS_ICONS[item.status] || 'help-circle-outline';
+    const matchInfo = (item as ICVSearchResultItem).matchInfo;
 
     return (
       <TouchableOpacity
@@ -334,6 +390,44 @@ const HrApplicationsListScreen: React.FC = () => {
             <Ionicons name="chevron-forward" size={18} color={COLORS.gray[400]} style={{ marginTop: 8 }} />
           </View>
         </View>
+
+        {/* Match Info (CV Search mode) */}
+        {matchInfo && (
+          <View style={styles.matchInfoContainer}>
+            {matchInfo.matchedSkills.length > 0 && (
+              <View style={styles.matchRow}>
+                <Ionicons name="checkmark-circle" size={13} color={COLORS.success} />
+                <Text style={styles.matchLabel}>Skills:</Text>
+                <View style={styles.matchTagsRow}>
+                  {matchInfo.matchedSkills.map((skill, idx) => (
+                    <View key={idx} style={styles.matchTag}>
+                      <Text style={styles.matchTagText}>{skill}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {matchInfo.matchedEducation.length > 0 && (
+              <View style={styles.matchRow}>
+                <Ionicons name="school" size={13} color={COLORS.info} />
+                <Text style={styles.matchLabel}>Education:</Text>
+                <View style={styles.matchTagsRow}>
+                  {matchInfo.matchedEducation.map((edu, idx) => (
+                    <View key={idx} style={styles.matchEduTag}>
+                      <Text style={styles.matchEduTagText} numberOfLines={1}>{edu}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {matchInfo.matchedInParsedText && matchInfo.matchedSkills.length === 0 && matchInfo.matchedEducation.length === 0 && (
+              <View style={styles.matchRow}>
+                <Ionicons name="document-text-outline" size={13} color={COLORS.warning} />
+                <Text style={styles.matchParsedText}>Ứng viên có CV phù hợp với tiêu chí tìm kiếm</Text>
+              </View>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -346,43 +440,78 @@ const HrApplicationsListScreen: React.FC = () => {
         <Text style={styles.headerSubtitle}>{allApplications.length} ứng viên đã ứng tuyển</Text>
       </View>
 
-      {/* AI Button */}
-      <TouchableOpacity 
-        style={styles.aiButton}
-        onPress={loadAIRanking}
-        disabled={aiLoading}
-        activeOpacity={0.8}
-      >
-        {aiLoading ? (
-          <ActivityIndicator size="small" color={COLORS.white} />
-        ) : (
-          <>
-            <Ionicons name="sparkles" size={20} color={COLORS.white} />
-            <Text style={styles.aiButtonText}>Xếp hạng ứng viên bằng AI</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
-          </>
-        )}
-      </TouchableOpacity>
+      {/* Action Buttons Row */}
+      <View style={styles.actionButtonsRow}>
+        {/* AI Button */}
+        <TouchableOpacity 
+          style={styles.aiButton}
+          onPress={loadAIRanking}
+          disabled={aiLoading}
+          activeOpacity={0.8}
+        >
+          {aiLoading ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <>
+              <Ionicons name="sparkles" size={18} color={COLORS.white} />
+              <Text style={styles.aiButtonText}>AI xếp hạng</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={18} color={COLORS.gray[400]} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm theo tên, email..."
-          placeholderTextColor={COLORS.gray[400]}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={COLORS.gray[400]} />
-          </TouchableOpacity>
-        )}
+        {/* CV Search Button */}
+        <TouchableOpacity 
+          style={[styles.cvSearchButton, cvSearchActive && styles.cvSearchButtonActive]}
+          onPress={() => setCvSearchModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="search" size={18} color={cvSearchActive ? COLORS.white : COLORS.primary} />
+          <Text style={[styles.cvSearchButtonText, cvSearchActive && styles.cvSearchButtonTextActive]}>
+            Tìm theo CV
+          </Text>
+        </TouchableOpacity>
       </View>
 
+      {/* Active CV Search Banner */}
+      {cvSearchActive && (
+        <View style={styles.cvSearchBanner}>
+          <View style={styles.cvSearchBannerLeft}>
+            <Ionicons name="filter" size={16} color={COLORS.primary} />
+            <Text style={styles.cvSearchBannerText}>
+              {cvSearchResults.length} kết quả
+              {skillTags.length > 0 ? ` | Skills: ${skillTags.join(', ')}` : ''}
+              {educationInput.trim() ? ` | Education: ${educationInput.trim()}` : ''}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={clearCvSearch} style={styles.cvSearchBannerClose}>
+            <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Search */}
+      {!cvSearchActive && (
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={18} color={COLORS.gray[400]} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm theo tên, email..."
+            placeholderTextColor={COLORS.gray[400]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={COLORS.gray[400]} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {/* Status Filter */}
-      <StatusFilter status={status} setStatus={setStatus} counts={statusCounts} />
+      {!cvSearchActive && (
+        <StatusFilter status={status} setStatus={setStatus} counts={statusCounts} />
+      )}
 
       {/* List */}
       {loading && applications.length === 0 ? (
@@ -391,10 +520,10 @@ const HrApplicationsListScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={applications}
+          data={cvSearchActive ? cvSearchResults : applications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, applications.length === 0 && { flexGrow: 1 }]}
+          contentContainerStyle={[styles.listContent, (cvSearchActive ? cvSearchResults : applications).length === 0 && { flexGrow: 1 }]}
           showsVerticalScrollIndicator={false}
           
           refreshControl={
@@ -482,6 +611,137 @@ const HrApplicationsListScreen: React.FC = () => {
               ))}
             </ScrollView>
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* CV Search Modal */}
+      <Modal
+        visible={cvSearchModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setCvSearchModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="search" size={22} color={COLORS.primary} />
+                <Text style={styles.modalTitle}>Tìm kiếm theo CV</Text>
+              </View>
+              <Text style={styles.modalSubtitle}>Tìm ứng viên theo kỹ năng và học vấn</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.modalCloseBtn}
+              onPress={() => setCvSearchModalVisible(false)}
+            >
+              <Ionicons name="close" size={24} color={COLORS.gray[600]} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView 
+            style={styles.modalScroll}
+            contentContainerStyle={styles.cvSearchModalContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Skills Section */}
+            <View style={styles.cvSearchSection}>
+              <View style={styles.cvSearchSectionHeader}>
+                <Ionicons name="code-slash" size={18} color={COLORS.primary} />
+                <Text style={styles.cvSearchSectionTitle}>Kỹ năng (Skills)</Text>
+              </View>
+              <Text style={styles.cvSearchHint}>
+                Nhập từng kỹ năng và nhấn "Thêm" hoặc Enter
+              </Text>
+
+              <View style={styles.skillInputRow}>
+                <TextInput
+                  style={styles.skillInputField}
+                  placeholder="VD: React, Python, Java..."
+                  placeholderTextColor={COLORS.gray[400]}
+                  value={skillInput}
+                  onChangeText={setSkillInput}
+                  onSubmitEditing={addSkillTag}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity 
+                  style={[styles.addSkillBtn, !skillInput.trim() && styles.addSkillBtnDisabled]}
+                  onPress={addSkillTag}
+                  disabled={!skillInput.trim()}
+                >
+                  <Ionicons name="add" size={20} color={COLORS.white} />
+                </TouchableOpacity>
+              </View>
+
+              {skillTags.length > 0 && (
+                <View style={styles.skillTagsContainer}>
+                  {skillTags.map((tag, idx) => (
+                    <View key={idx} style={styles.searchSkillTag}>
+                      <Text style={styles.searchSkillTagText}>{tag}</Text>
+                      <TouchableOpacity onPress={() => removeSkillTag(tag)}>
+                        <Ionicons name="close-circle" size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Education Section */}
+            <View style={styles.cvSearchSection}>
+              <View style={styles.cvSearchSectionHeader}>
+                <Ionicons name="school" size={18} color={COLORS.info} />
+                <Text style={styles.cvSearchSectionTitle}>Học vấn (Education)</Text>
+              </View>
+              <Text style={styles.cvSearchHint}>
+                Nhập từ khóa về trường học, chuyên ngành, bằng cấp...
+              </Text>
+
+              <TextInput
+                style={styles.educationInputField}
+                placeholder="VD: Đại học Bách Khoa, Computer Science..."
+                placeholderTextColor={COLORS.gray[400]}
+                value={educationInput}
+                onChangeText={setEducationInput}
+                multiline={false}
+              />
+            </View>
+
+            {/* Info box */}
+            <View style={styles.cvSearchInfoBox}>
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.gray[500]} />
+              <Text style={styles.cvSearchInfoText}>
+                Tìm kiếm sẽ so khớp trong nội dung CV của ứng viên.
+              </Text>
+            </View>
+
+            {/* Action buttons */}
+            <View style={styles.cvSearchActions}>
+              <TouchableOpacity
+                style={styles.cvSearchClearBtn}
+                onPress={() => { setSkillTags([]); setEducationInput(''); }}
+              >
+                <Text style={styles.cvSearchClearBtnText}>Xóa tất cả</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.cvSearchSubmitBtn,
+                  (skillTags.length === 0 && !educationInput.trim()) && styles.cvSearchSubmitBtnDisabled,
+                ]}
+                onPress={executeCvSearch}
+                disabled={cvSearchLoading || (skillTags.length === 0 && !educationInput.trim())}
+              >
+                {cvSearchLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Ionicons name="search" size={18} color={COLORS.white} />
+                    <Text style={styles.cvSearchSubmitBtnText}>Tìm kiếm</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -663,28 +923,282 @@ const styles = StyleSheet.create({
   },
   // AI Button styles
   aiButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
     shadowColor: COLORS.primary,
     shadowOpacity: 0.3,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
-    gap: 8,
+    gap: 6,
   },
   aiButtonText: {
-    flex: 1,
     color: COLORS.white,
     fontWeight: '700',
+    fontSize: 14,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    gap: 10,
+  },
+  cvSearchButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    gap: 6,
+  },
+  cvSearchButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  cvSearchButtonText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  cvSearchButtonTextActive: {
+    color: COLORS.white,
+  },
+  cvSearchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primary + '12',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  cvSearchBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  cvSearchBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  cvSearchBannerClose: {
+    marginLeft: 8,
+  },
+  // Match info styles (on cards)
+  matchInfoContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.gray[100],
+    gap: 6,
+  },
+  matchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  matchLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.gray[600],
+  },
+  matchTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    flex: 1,
+  },
+  matchTag: {
+    backgroundColor: COLORS.success + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  matchTagText: {
+    fontSize: 11,
+    color: COLORS.success,
+    fontWeight: '600',
+  },
+  matchEduTag: {
+    backgroundColor: COLORS.info + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    maxWidth: '70%',
+  },
+  matchEduTagText: {
+    fontSize: 11,
+    color: COLORS.info,
+    fontWeight: '600',
+  },
+  matchParsedText: {
+    fontSize: 12,
+    color: COLORS.warning,
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  // CV Search Modal styles
+  cvSearchModalContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  cvSearchSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: COLORS.gray[400],
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  cvSearchSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  cvSearchSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.gray[800],
+  },
+  cvSearchHint: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    marginBottom: 12,
+  },
+  skillInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  skillInputField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 15,
+    color: COLORS.gray[800],
+    backgroundColor: COLORS.gray[50],
+  },
+  addSkillBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addSkillBtnDisabled: {
+    backgroundColor: COLORS.gray[300],
+  },
+  skillTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  searchSkillTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '15',
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  searchSkillTagText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  educationInputField: {
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: COLORS.gray[800],
+    backgroundColor: COLORS.gray[50],
+  },
+  cvSearchInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.gray[50],
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    gap: 8,
+  },
+  cvSearchInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.gray[500],
+    lineHeight: 18,
+  },
+  cvSearchActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cvSearchClearBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.gray[300],
+    backgroundColor: COLORS.white,
+  },
+  cvSearchClearBtnText: {
+    fontSize: 15,
+    color: COLORS.gray[600],
+    fontWeight: '600',
+  },
+  cvSearchSubmitBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    gap: 8,
+  },
+  cvSearchSubmitBtnDisabled: {
+    backgroundColor: COLORS.gray[300],
+  },
+  cvSearchSubmitBtnText: {
+    fontSize: 15,
+    color: COLORS.white,
+    fontWeight: '700',
   },
   // AI Card styles
   aiCard: {

@@ -114,29 +114,6 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HR)
-  @ApiOperation({ summary: 'Search HRs by name (Admin/HR only)' })
-  @ApiBearerAuth()
-  @ApiQuery({ name: 'name', required: false, description: 'Search by name' })
-  @ApiQuery({ name: 'companyId', required: false, description: 'Exclude HRs from other companies' })
-  @Get('/hrs/search')
-  searchHrs(@Query('name') name: string, @Query('companyId') companyId?: string) {
-    return this.usersService.searchHrsByName(name, companyId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.HR)
-  @ApiOperation({ summary: 'Add HR to company (Admin/HR only)' })
-  @ApiBearerAuth()
-  @Post('/hrs/add-to-company')
-  addHrToCompany(
-    @Body() body: { hrId: string; companyId: string; companyName: string },
-    @User() user: IUser,
-  ) {
-    return this.usersService.addHrToCompany(body.hrId, body.companyId, body.companyName);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.HR)
   @ApiOperation({ summary: 'Remove HR from company (Admin/HR only)' })
   @ApiBearerAuth()
   @Post('/hrs/remove-from-company')
@@ -145,5 +122,59 @@ export class UsersController {
     @User() user: IUser,
   ) {
     return this.usersService.removeHrFromCompany(body.hrId, body.companyId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Lock user account (Admin only)' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Lock user successfully' })
+  @Post(':id/lock')
+  lockUser(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @User() user: IUser,
+  ) {
+    return this.usersService.lockUser(id, body.reason, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Unlock user account (Admin only)' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Unlock user successfully' })
+  @Post(':id/unlock')
+  unlockUser(@Param('id') id: string, @User() user: IUser) {
+    return this.usersService.unlockUser(id, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get all candidates - USER role only (Admin only)' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Get candidates list successfully' })
+  @ApiQuery({ name: 'current', required: false, description: 'Current page number', example: 1 })
+  @ApiQuery({ name: 'pageSize', required: false, description: 'Number of items per page', example: 10 })
+  @Get('/admin/candidates')
+  findAllCandidates(@Query() qs: string) {
+    return this.usersService.findAllCandidates(qs);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Approve HR account (Admin only)' })
+  @ApiBearerAuth()
+  @Post(':id/approve-hr')
+  approveHr(@Param('id') id: string, @User() user: IUser) {
+    return this.usersService.approveHr(id, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get pending HR accounts (Admin only)' })
+  @ApiBearerAuth()
+  @Get('/admin/pending-hrs')
+  findPendingHrs() {
+    return this.usersService.findPendingHrs();
   }
 }
