@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   SafeAreaView,
-  FlatList,
   TouchableOpacity,
   Alert,
   RefreshControl,
@@ -18,7 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { COLORS, SIZES } from '../../constants';
-import { CVCard, Loading, EmptyState, Button, Input } from '../../components';
+import { CVCard, Loading, EmptyState, Input } from '../../components';
 import { userCVService } from '../../services/userCVService';
 import { onlineCVService, IOnlineCV } from '../../services/onlineCVService';
 import api from '../../services/api';
@@ -29,43 +28,57 @@ type MyCVsScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'MyCVs'>;
 };
 
+// ---------- Tab type ----------
+type TabKey = 'online' | 'uploaded';
+
 const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
   const [cvs, setCvs] = useState<IUserCV[]>([]);
-  const [draftCVs, setDraftCVs] = useState<IOnlineCV[]>([]); // Online CV drafts
+  const [draftCVs, setDraftCVs] = useState<IOnlineCV[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
   const [cvName, setCvName] = useState('');
   const [pickedFile, setPickedFile] = useState<any>(null);
-  
+  const [activeTab, setActiveTab] = useState<TabKey>('online');
+
   // Edit CV states
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCV, setEditingCV] = useState<IUserCV | null>(null);
   const [editCvName, setEditCvName] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Reload data when screen comes into focus
+  // ---------- Derived data ----------
+  // Online CVs = exported online CVs (UserCV with onlineCvId) + drafts
+  const onlineExportedCVs = useMemo(
+    () => cvs.filter((cv) => !!cv.onlineCvId),
+    [cvs],
+  );
+  // Uploaded CVs = UserCV without onlineCvId
+  const uploadedCVs = useMemo(
+    () => cvs.filter((cv) => !cv.onlineCvId),
+    [cvs],
+  );
+
+  const onlineCount = draftCVs.length + onlineExportedCVs.length;
+  const uploadedCount = uploadedCVs.length;
+
+  // ---------- Data loading ----------
   useFocusEffect(
     useCallback(() => {
       loadCVs();
-    }, [])
+    }, []),
   );
 
   const loadCVs = async () => {
     try {
-      console.log('Loading CVs...');
       const [cvsResponse, draftsResponse] = await Promise.all([
         userCVService.getMyCVs(),
         onlineCVService.getMyOnlineCVs(),
       ]);
-      console.log('CVs response:', JSON.stringify(cvsResponse));
-      console.log('Drafts response:', JSON.stringify(draftsResponse));
       setCvs(cvsResponse.data || []);
-      // Only show online CVs as drafts if they haven't been exported to PDF yet
       const allOnlineCVs = draftsResponse.data || [];
       setDraftCVs(allOnlineCVs.filter((cv: IOnlineCV) => !cv.pdfUrl));
-      console.log('Drafts set:', allOnlineCVs.filter((cv: IOnlineCV) => !cv.pdfUrl).length, 'of', allOnlineCVs.length);
     } catch (error) {
       console.error('Failed to load CVs:', error);
     } finally {
@@ -79,10 +92,10 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
     setRefreshing(false);
   };
 
+  // ---------- Upload handlers ----------
   const handleUploadCV = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        // Only allow PDF and DOCX files
         type: [
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -91,40 +104,26 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
         copyToCacheDirectory: true,
       });
 
-      // Expo DocumentPicker returns { type: 'success'|'cancel', uri, name, size, mimeType }
-      // On web it also has `file` (File object) and `output` (FileList)
-      // On newer Expo SDK it returns { canceled, assets: [{ uri, name, mimeType, size }] }
-      
-      console.log('DocumentPicker raw result:', JSON.stringify(result, null, 2));
-      
       if ((result as any).type === 'cancel' || (result as any).canceled === true) return;
 
       const picked: any = result;
-      
-      // Handle both old format (direct properties) and new format (assets array)
       const asset = picked.assets?.[0] || picked;
-      
-      console.log('Asset extracted:', JSON.stringify(asset, null, 2));
 
-      // On web, prefer the actual File object; on native use uri
       const file = {
         uri: asset.uri || asset.fileUri || picked.uri || picked.fileUri || '',
         mimeType: asset.mimeType || asset.type || picked.mimeType || picked.type || 'application/pdf',
         name: asset.name || asset.fileName || picked.name || picked.fileName || 'upload.pdf',
-        webFile: picked.file || picked.output?.[0] || asset.file || null, // actual File object on web
+        webFile: picked.file || picked.output?.[0] || asset.file || null,
       };
-
-      console.log('Picked file:', JSON.stringify(file, null, 2));
 
       if (!file.uri) {
         Alert.alert('Lỗi', 'Không tìm thấy đường dẫn file. Vui lòng thử lại.');
         return;
       }
 
-      // Small delay to ensure file is fully written to cache on native
       const isWeb = typeof window !== 'undefined' && !!(window as any).document;
       if (!isWeb) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
       setPickedFile(file);
@@ -143,42 +142,24 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
 
     setUploading(true);
     try {
-      // 1) Upload file to /files/upload (field name expected: fileUpload)
       const uploadForm = new FormData();
-
-      // Handle web vs native platforms
       const isWeb = typeof window !== 'undefined' && !!(window as any).document;
-      
-      console.log('Upload debug:', {
-        isWeb,
-        uri: pickedFile.uri,
-        mimeType: pickedFile.mimeType,
-        name: pickedFile.name,
-        hasWebFile: !!pickedFile.webFile,
-      });
 
       if (isWeb && pickedFile.webFile) {
-        // Web: use the actual File object directly from DocumentPicker
         uploadForm.append('fileUpload', pickedFile.webFile);
       } else if (isWeb) {
-        // Web fallback: fetch the URI and create File
         const response = await fetch(pickedFile.uri);
         const blobData = await response.blob();
         const mimeType = pickedFile.mimeType || 'application/pdf';
         const file = new File([blobData], pickedFile.name, { type: mimeType });
         uploadForm.append('fileUpload', file);
       } else {
-        // Native (iOS/Android): use uri/type/name object
-        // Ensure URI starts with file:// for some platforms
         let fileUri = pickedFile.uri || '';
         if (fileUri && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
           fileUri = 'file://' + fileUri;
         }
-        
-        if (!fileUri) {
-          throw new Error('Không tìm thấy đường dẫn file');
-        }
-        
+        if (!fileUri) throw new Error('Không tìm thấy đường dẫn file');
+
         uploadForm.append('fileUpload', {
           uri: fileUri,
           type: pickedFile.mimeType || 'application/pdf',
@@ -186,49 +167,37 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
         } as any);
       }
 
-      // Don't set Content-Type manually - let RN set it with boundary
-      // Add retry logic for transient network errors on native
       let uploadResp;
       let lastError;
       const maxRetries = 2;
-      
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           uploadResp = await api.post('/files/upload', uploadForm, {
             headers: { 'Content-Type': 'multipart/form-data' },
-            transformRequest: (data) => data, // Prevent axios from transforming FormData
-            timeout: 60000, // 60 second timeout for file uploads
+            transformRequest: (data) => data,
+            timeout: 60000,
           });
-          break; // Success, exit loop
+          break;
         } catch (err: any) {
           lastError = err;
-          console.log(`Upload attempt ${attempt} failed:`, err.message);
-          if (attempt < maxRetries) {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          if (attempt < maxRetries) await new Promise((r) => setTimeout(r, 500));
         }
       }
-      
-      if (!uploadResp) {
-        throw lastError || new Error('Upload failed after retries');
-      }
 
-      // Files service returns { url: '...' } or wrapped in data
-      const uploadedUrl =
-        uploadResp?.data?.url || uploadResp?.data?.data?.url || uploadResp?.data;
+      if (!uploadResp) throw lastError || new Error('Upload failed after retries');
 
-      if (!uploadedUrl) {
-        throw new Error('Không nhận được đường dẫn file từ server');
-      }
+      const uploadedUrl = uploadResp?.data?.url || uploadResp?.data?.data?.url || uploadResp?.data;
+      if (!uploadedUrl) throw new Error('Không nhận được đường dẫn file từ server');
 
-      // 2) Create user CV record with returned url
       await userCVService.createCV({ url: uploadedUrl, title: cvName.trim() });
       await loadCVs();
 
       setShowNameModal(false);
       setPickedFile(null);
       setCvName('');
+      // Switch to uploaded tab to show the new CV
+      setActiveTab('uploaded');
       Alert.alert('Thành công', 'Tải CV lên thành công');
     } catch (error: any) {
       console.error('Upload error', error);
@@ -238,6 +207,7 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
     }
   };
 
+  // ---------- CV actions ----------
   const handleSetPrimary = async (cvId: string) => {
     try {
       await userCVService.setPrimaryCv(cvId);
@@ -266,56 +236,44 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
   };
 
   const handleViewCV = (cv: IUserCV) => {
-    // Open PDF or DOCX files in browser/external viewer
-    if (cv.url) {
-      Linking.openURL(cv.url);
-    }
+    if (cv.url) Linking.openURL(cv.url);
   };
 
-  // Handle edit CV - different behavior for online vs uploaded CVs
   const handleEditCV = (cv: IUserCV) => {
     if (cv.onlineCvId) {
-      // Online CV: navigate to CVFormScreen to edit content + can also edit name here
-      Alert.alert(
-        'Chỉnh sửa CV',
-        'Bạn muốn chỉnh sửa gì?',
-        [
-          { text: 'Hủy', style: 'cancel' },
-          {
-            text: 'Đổi tên',
-            onPress: () => {
-              setEditingCV(cv);
-              setEditCvName(cv.title || '');
-              setShowEditModal(true);
-            },
+      Alert.alert('Chỉnh sửa CV', 'Bạn muốn chỉnh sửa gì?', [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Đổi tên',
+          onPress: () => {
+            setEditingCV(cv);
+            setEditCvName(cv.title || '');
+            setShowEditModal(true);
           },
-          {
-            text: 'Sửa nội dung',
-            onPress: () => {
-              // Navigate to CVFormScreen with onlineCvId
-              navigation.navigate('CVFormScreen', { 
-                templateType: '', // Will be loaded from the online CV
-                cvId: cv.onlineCvId 
-              });
-            },
+        },
+        {
+          text: 'Sửa nội dung',
+          onPress: () => {
+            navigation.navigate('CVFormScreen', {
+              templateType: '',
+              cvId: cv.onlineCvId,
+            });
           },
-        ]
-      );
+        },
+      ]);
     } else {
-      // Uploaded CV: only allow editing name
       setEditingCV(cv);
       setEditCvName(cv.title || '');
       setShowEditModal(true);
     }
   };
 
-  // Save edited CV name
   const handleSaveEditName = async () => {
     if (!editingCV || !editCvName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên CV');
       return;
     }
-    
+
     setSaving(true);
     try {
       await userCVService.updateCV(editingCV._id, { title: editCvName.trim() });
@@ -331,303 +289,411 @@ const MyCVsScreen: React.FC<MyCVsScreenProps> = ({ navigation }) => {
     }
   };
 
+  // ---------- Render helpers ----------
+  const renderDraftCard = (draft: IOnlineCV) => (
+    <TouchableOpacity
+      key={draft._id}
+      style={styles.draftCard}
+      onPress={() =>
+        navigation.navigate('CVFormScreen', {
+          templateType: draft.templateType,
+          cvId: draft._id,
+        })
+      }
+    >
+      <View style={styles.draftIcon}>
+        <Ionicons
+          name={draft.templateType === 'template1' ? 'document-text' : 'grid'}
+          size={24}
+          color={COLORS.primary}
+        />
+      </View>
+      <View style={styles.draftInfo}>
+        <View style={styles.draftBadge}>
+          <Text style={styles.draftBadgeText}>Bản nháp</Text>
+        </View>
+        <Text style={styles.draftName} numberOfLines={1}>
+          {draft.fullName || 'Chưa có tên'}
+        </Text>
+        <Text style={styles.draftTemplate}>
+          {draft.templateType === 'template1' ? 'Mẫu cơ bản' : 'Mẫu hiện đại'}
+        </Text>
+        <Text style={styles.draftDate}>
+          Cập nhật: {new Date(draft.updatedAt).toLocaleDateString('vi-VN')}
+        </Text>
+      </View>
+      <View style={styles.draftActions}>
+        <TouchableOpacity
+          style={styles.draftActionBtn}
+          onPress={() => {
+            Alert.alert('Xóa bản nháp', 'Bạn có chắc muốn xóa bản nháp này?', [
+              { text: 'Hủy', style: 'cancel' },
+              {
+                text: 'Xóa',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await onlineCVService.deleteOnlineCV(draft._id);
+                    await loadCVs();
+                  } catch {
+                    Alert.alert('Lỗi', 'Không thể xóa bản nháp');
+                  }
+                },
+              },
+            ]);
+          }}
+        >
+          <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+        </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.gray[400]} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderOnlineTab = () => {
+    if (onlineCount === 0) {
+      return (
+        <View style={styles.tabEmptyContainer}>
+          <View style={styles.tabEmptyIcon}>
+            <Ionicons name="create-outline" size={48} color={COLORS.primary + '40'} />
+          </View>
+          <Text style={styles.tabEmptyTitle}>Chưa có CV online nào</Text>
+          <Text style={styles.tabEmptyMessage}>
+            Tạo CV trực tiếp trên hệ thống với các mẫu chuyên nghiệp
+          </Text>
+          <TouchableOpacity
+            style={styles.tabEmptyAction}
+            onPress={() => navigation.navigate('CVTemplateSelect')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
+            <Text style={styles.tabEmptyActionText}>Tạo CV online</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {/* Drafts */}
+        {draftCVs.length > 0 && (
+          <View style={styles.subSection}>
+            <View style={styles.subSectionHeader}>
+              <View style={styles.subSectionDot} />
+              <Text style={styles.subSectionTitle}>
+                Đang chỉnh sửa ({draftCVs.length})
+              </Text>
+            </View>
+            {draftCVs.map(renderDraftCard)}
+          </View>
+        )}
+
+        {/* Exported online CVs */}
+        {onlineExportedCVs.length > 0 && (
+          <View style={styles.subSection}>
+            {draftCVs.length > 0 && (
+              <View style={styles.subSectionHeader}>
+                <View style={[styles.subSectionDot, { backgroundColor: COLORS.success }]} />
+                <Text style={styles.subSectionTitle}>
+                  Đã hoàn thành ({onlineExportedCVs.length})
+                </Text>
+              </View>
+            )}
+            {onlineExportedCVs.map((item) => (
+              <CVCard
+                key={item._id}
+                cv={item}
+                onPress={() => handleViewCV(item)}
+                onSetPrimary={() => handleSetPrimary(item._id)}
+                onDelete={() => handleDeleteCV(item)}
+                onEdit={() => handleEditCV(item)}
+              />
+            ))}
+          </View>
+        )}
+      </>
+    );
+  };
+
+  const renderUploadedTab = () => {
+    if (uploadedCount === 0) {
+      return (
+        <View style={styles.tabEmptyContainer}>
+          <View style={styles.tabEmptyIcon}>
+            <Ionicons name="cloud-upload-outline" size={48} color={COLORS.primary + '40'} />
+          </View>
+          <Text style={styles.tabEmptyTitle}>Chưa tải CV nào lên</Text>
+          <Text style={styles.tabEmptyMessage}>
+            Tải file CV (PDF, DOCX) từ thiết bị của bạn lên hệ thống
+          </Text>
+          <TouchableOpacity
+            style={[styles.tabEmptyAction, { backgroundColor: COLORS.primary }]}
+            onPress={handleUploadCV}
+          >
+            <Ionicons name="cloud-upload-outline" size={18} color={COLORS.white} />
+            <Text style={styles.tabEmptyActionText}>Tải lên CV</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {uploadedCVs.map((item) => (
+          <CVCard
+            key={item._id}
+            cv={item}
+            onPress={() => handleViewCV(item)}
+            onSetPrimary={() => handleSetPrimary(item._id)}
+            onDelete={() => handleDeleteCV(item)}
+            onEdit={() => handleEditCV(item)}
+          />
+        ))}
+      </>
+    );
+  };
+
+  // ---------- Main render ----------
   if (loading) {
     return <Loading fullScreen text="Đang tải CV..." />;
   }
 
+  const totalCVs = onlineCount + uploadedCount;
+
   return (
-    <>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>CV của tôi</Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={[styles.uploadButton, styles.createOnlineBtn]}
-              onPress={() => navigation.navigate('CVTemplateSelect')}
-            >
-              <Ionicons name="create-outline" size={20} color={COLORS.white} />
-              <Text style={styles.uploadButtonText}>Tạo online</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.uploadButton}
-              onPress={handleUploadCV}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} />
-                  <Text style={styles.uploadButtonText}>Tải lên</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>CV của tôi</Text>
+      </View>
 
-        {/* Info */}
-        <View style={styles.infoContainer}>
-          <Ionicons name="information-circle-outline" size={20} color={COLORS.info} />
-          <Text style={styles.infoText}>
-            Chỉ hỗ trợ file PDF và DOCX. Chọn một CV làm CV chính, CV này sẽ được tự động chọn khi bạn ứng tuyển.
-          </Text>
-        </View>
+      {/* Info banner */}
+      <View style={styles.infoContainer}>
+        <Ionicons name="information-circle-outline" size={18} color={COLORS.info} />
+        <Text style={styles.infoText}>
+          Chọn một CV làm CV chính, CV này sẽ được tự động chọn khi ứng tuyển.
+        </Text>
+      </View>
 
-        {/* Name input modal (cross-platform) */}
-        <Modal visible={showNameModal} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Đặt tên CV</Text>
-
-              <Input placeholder="Tên CV" value={cvName} onChangeText={setCvName} />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancel]}
-                  onPress={() => {
-                    setShowNameModal(false);
-                    setPickedFile(null);
-                  }}
-                  disabled={uploading}
-                >
-                  <Text style={styles.modalButtonText}>Hủy</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalConfirm, uploading && styles.modalButtonDisabled]}
-                  onPress={handleConfirmUpload}
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <View style={styles.loadingRow}>
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                      <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>Đang tải...</Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Xác nhận</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* CV List */}
-        {cvs.length === 0 && draftCVs.length === 0 ? (
-          <EmptyState
-            icon="document-text-outline"
-            title="Chưa có CV nào"
-            message="Tải lên CV của bạn để bắt đầu ứng tuyển"
-            actionLabel="Tải lên CV"
-            onAction={handleUploadCV}
+      {/* Tabs */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'online' && styles.tabActive]}
+          onPress={() => setActiveTab('online')}
+        >
+          <Ionicons
+            name="laptop-outline"
+            size={16}
+            color={activeTab === 'online' ? COLORS.primary : COLORS.gray[400]}
           />
-        ) : (
-          <ScrollView
-            style={styles.scrollContainer}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          <Text
+            style={[styles.tabText, activeTab === 'online' && styles.tabTextActive]}
           >
-            {/* Draft CVs Section */}
-            {draftCVs.length > 0 && (
-              <View style={styles.sectionContainer}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="document-outline" size={18} color={COLORS.warning} />
-                  <Text style={styles.sectionTitle}>Bản nháp ({draftCVs.length})</Text>
-                </View>
-                <Text style={styles.sectionSubtitle}>
-                  CV đang tạo dở, nhấn để tiếp tục chỉnh sửa
-                </Text>
-                {draftCVs.map((draft) => (
-                  <TouchableOpacity
-                    key={draft._id}
-                    style={styles.draftCard}
-                    onPress={() => navigation.navigate('CVFormScreen', { 
-                      templateType: draft.templateType, 
-                      cvId: draft._id 
-                    })}
-                  >
-                    <View style={styles.draftIcon}>
-                      <Ionicons 
-                        name={draft.templateType === 'template1' ? 'document-text' : 'grid'} 
-                        size={24} 
-                        color={COLORS.primary} 
-                      />
-                    </View>
-                    <View style={styles.draftInfo}>
-                      <Text style={styles.draftName} numberOfLines={1}>
-                        {draft.fullName || 'Chưa có tên'}
-                      </Text>
-                      <Text style={styles.draftTemplate}>
-                        {draft.templateType === 'template1' ? 'Mẫu cơ bản' : 'Mẫu hiện đại'}
-                      </Text>
-                      <Text style={styles.draftDate}>
-                        Cập nhật: {new Date(draft.updatedAt).toLocaleDateString('vi-VN')}
-                      </Text>
-                    </View>
-                    <View style={styles.draftActions}>
-                      <TouchableOpacity
-                        style={styles.draftActionBtn}
-                        onPress={() => {
-                          Alert.alert(
-                            'Xóa bản nháp',
-                            'Bạn có chắc muốn xóa bản nháp này?',
-                            [
-                              { text: 'Hủy', style: 'cancel' },
-                              {
-                                text: 'Xóa',
-                                style: 'destructive',
-                                onPress: async () => {
-                                  try {
-                                    await onlineCVService.deleteOnlineCV(draft._id);
-                                    await loadCVs();
-                                  } catch (err) {
-                                    Alert.alert('Lỗi', 'Không thể xóa bản nháp');
-                                  }
-                                },
-                              },
-                            ]
-                          );
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                      </TouchableOpacity>
-                      <Ionicons name="chevron-forward" size={20} color={COLORS.gray[400]} />
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            Tạo trên hệ thống
+          </Text>
+          {onlineCount > 0 && (
+            <View
+              style={[
+                styles.tabBadge,
+                activeTab === 'online' && styles.tabBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBadgeText,
+                  activeTab === 'online' && styles.tabBadgeTextActive,
+                ]}
+              >
+                {onlineCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
-            {/* Completed CVs Section */}
-            {cvs.length > 0 && (
-              <View style={styles.sectionContainer}>
-                {draftCVs.length > 0 && (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-                      <Text style={styles.sectionTitle}>CV hoàn chỉnh ({cvs.length})</Text>
-                    </View>
-                    <Text style={styles.sectionSubtitle}>
-                      CV đã hoàn thành, sẵn sàng ứng tuyển
-                    </Text>
-                  </>
-                )}
-                {cvs.map((item) => (
-                  <CVCard
-                    key={item._id}
-                    cv={item}
-                    onPress={() => handleViewCV(item)}
-                    onSetPrimary={() => handleSetPrimary(item._id)}
-                    onDelete={() => handleDeleteCV(item)}
-                    onEdit={() => handleEditCV(item)}
-                  />
-                ))}
-              </View>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'uploaded' && styles.tabActive]}
+          onPress={() => setActiveTab('uploaded')}
+        >
+          <Ionicons
+            name="cloud-upload-outline"
+            size={16}
+            color={activeTab === 'uploaded' ? COLORS.primary : COLORS.gray[400]}
+          />
+          <Text
+            style={[styles.tabText, activeTab === 'uploaded' && styles.tabTextActive]}
+          >
+            Đã tải lên
+          </Text>
+          {uploadedCount > 0 && (
+            <View
+              style={[
+                styles.tabBadge,
+                activeTab === 'uploaded' && styles.tabBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBadgeText,
+                  activeTab === 'uploaded' && styles.tabBadgeTextActive,
+                ]}
+              >
+                {uploadedCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab action button */}
+      <View style={styles.tabActionRow}>
+        {activeTab === 'online' ? (
+          <TouchableOpacity
+            style={[styles.tabActionBtn, { backgroundColor: COLORS.success }]}
+            onPress={() => navigation.navigate('CVTemplateSelect')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
+            <Text style={styles.tabActionBtnText}>Tạo CV online</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.tabActionBtn, { backgroundColor: COLORS.primary }]}
+            onPress={handleUploadCV}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={18} color={COLORS.white} />
+                <Text style={styles.tabActionBtnText}>Tải lên CV</Text>
+              </>
             )}
-          </ScrollView>
+          </TouchableOpacity>
         )}
+      </View>
 
-        {/* Edit CV Name Modal */}
-        <Modal visible={showEditModal} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Đổi tên CV</Text>
-              
-              <Input 
-                placeholder="Tên CV" 
-                value={editCvName} 
-                onChangeText={setEditCvName} 
-              />
-              
-              {editingCV?.onlineCvId && (
-                <Text style={styles.editHint}>
-                  Đây là CV tạo online. Bạn có thể sửa nội dung trong màn hình chi tiết.
-                </Text>
-              )}
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancel]}
-                  onPress={() => {
-                    setShowEditModal(false);
-                    setEditingCV(null);
-                    setEditCvName('');
-                  }}
-                  disabled={saving}
-                >
-                  <Text style={styles.modalButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalConfirm, saving && styles.modalButtonDisabled]}
-                  onPress={handleSaveEditName}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <View style={styles.loadingRow}>
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                      <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>Đang lưu...</Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Lưu</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+      {/* Content */}
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {activeTab === 'online' ? renderOnlineTab() : renderUploadedTab()}
+      </ScrollView>
+
+      {/* Upload name modal */}
+      <Modal visible={showNameModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Đặt tên CV</Text>
+            <Input placeholder="Tên CV" value={cvName} onChangeText={setCvName} />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => {
+                  setShowNameModal(false);
+                  setPickedFile(null);
+                }}
+                disabled={uploading}
+              >
+                <Text style={styles.modalButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirm, uploading && styles.modalButtonDisabled]}
+                onPress={handleConfirmUpload}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                    <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>
+                      Đang tải...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Xác nhận</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </SafeAreaView>
-    </>
+        </View>
+      </Modal>
+
+      {/* Edit name modal */}
+      <Modal visible={showEditModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Đổi tên CV</Text>
+            <Input placeholder="Tên CV" value={editCvName} onChangeText={setEditCvName} />
+            {editingCV?.onlineCvId && (
+              <Text style={styles.editHint}>
+                Đây là CV tạo online. Bạn có thể sửa nội dung trong màn hình chi tiết.
+              </Text>
+            )}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => {
+                  setShowEditModal(false);
+                  setEditingCV(null);
+                  setEditCvName('');
+                }}
+                disabled={saving}
+              >
+                <Text style={styles.modalButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirm, saving && styles.modalButtonDisabled]}
+                onPress={handleSaveEditName}
+                disabled={saving}
+              >
+                {saving ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                    <Text style={[styles.modalButtonText, { color: COLORS.white, marginLeft: 8 }]}>
+                      Đang lưu...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: COLORS.white }]}>Lưu</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
+// ---------- Styles ----------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SIZES.padding,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.gray[800],
   },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  createOnlineBtn: {
-    backgroundColor: COLORS.success,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: SIZES.radius,
-    gap: 6,
-  },
-  uploadButtonText: {
-    color: COLORS.white,
-    fontWeight: '600',
-    fontSize: SIZES.sm,
-  },
+  // Info
   infoContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: COLORS.info + '10',
     marginHorizontal: SIZES.padding,
     marginBottom: 12,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: SIZES.radius,
     gap: 8,
   },
@@ -635,34 +701,113 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: SIZES.sm,
     color: COLORS.info,
-    lineHeight: 20,
+    lineHeight: 18,
   },
-  listContent: {
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: SIZES.padding,
+    backgroundColor: COLORS.gray[100],
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  tabActive: {
+    backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.gray[400],
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  tabBadge: {
+    backgroundColor: COLORS.gray[200],
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  tabBadgeActive: {
+    backgroundColor: COLORS.primary + '15',
+  },
+  tabBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.gray[500],
+  },
+  tabBadgeTextActive: {
+    color: COLORS.primary,
+  },
+  // Tab action row
+  tabActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     paddingHorizontal: SIZES.padding,
-    paddingBottom: 20,
+    marginBottom: 8,
   },
+  tabActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: SIZES.radius,
+    gap: 6,
+  },
+  tabActionBtnText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    fontSize: SIZES.sm,
+  },
+  // Scroll / list
   scrollContainer: {
     flex: 1,
   },
-  sectionContainer: {
+  listContent: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: 24,
+  },
+  // Sub-section (within a tab)
+  subSection: {
     marginBottom: 16,
   },
-  sectionHeader: {
+  subSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 16,
+  subSectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.warning,
+  },
+  subSectionTitle: {
+    fontSize: SIZES.md,
     fontWeight: '600',
-    color: COLORS.gray[800],
+    color: COLORS.gray[700],
   },
-  sectionSubtitle: {
-    fontSize: SIZES.sm,
-    color: COLORS.gray[500],
-    marginBottom: 12,
-  },
+  // Draft card
   draftCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -677,7 +822,7 @@ const styles = StyleSheet.create({
   draftIcon: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.primary + '10',
     justifyContent: 'center',
     alignItems: 'center',
@@ -685,6 +830,20 @@ const styles = StyleSheet.create({
   draftInfo: {
     flex: 1,
     marginLeft: 12,
+  },
+  draftBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.warning + '18',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  draftBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.warning,
+    textTransform: 'uppercase',
   },
   draftName: {
     fontSize: SIZES.md,
@@ -709,6 +868,49 @@ const styles = StyleSheet.create({
   draftActionBtn: {
     padding: 6,
   },
+  // Tab empty state
+  tabEmptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  tabEmptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary + '08',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  tabEmptyTitle: {
+    fontSize: SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.gray[700],
+    marginBottom: 8,
+  },
+  tabEmptyMessage: {
+    fontSize: SIZES.sm,
+    color: COLORS.gray[400],
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  tabEmptyAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: SIZES.radius,
+    gap: 6,
+  },
+  tabEmptyActionText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    fontSize: SIZES.md,
+  },
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -719,13 +921,14 @@ const styles = StyleSheet.create({
   modalBox: {
     width: '100%',
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    padding: 16,
+    borderRadius: 12,
+    padding: 20,
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
+    color: COLORS.gray[800],
   },
   editHint: {
     fontSize: SIZES.sm,
@@ -737,11 +940,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 8,
-    marginTop: 12,
+    marginTop: 16,
   },
   modalButton: {
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
   },
   modalCancel: {

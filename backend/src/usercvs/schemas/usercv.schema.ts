@@ -16,7 +16,7 @@ export class UserCV {
   description: string;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'OnlineCV' })
-  onlineCvId: mongoose.Schema.Types.ObjectId; // Reference to online CV if created via online builder
+  onlineCvId: mongoose.Schema.Types.ObjectId;
 
   @Prop({ enum: ['pdf', 'docx', 'online'], default: 'pdf' })
   fileType: string;
