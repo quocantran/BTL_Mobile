@@ -65,9 +65,11 @@ export class ApplicationsController {
     @Param('jobId') jobId: string,
     @Query('skills') skills: string,
     @Query('education') education: string,
+    @Query('address') address: string,
+    @Query('certificates') certificates: string,
     @User() user: IUser,
   ) {
-    return this.applicationsService.searchByCV(jobId, { skills, education }, user);
+    return this.applicationsService.searchByCV(jobId, { skills, education, address, certificates }, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

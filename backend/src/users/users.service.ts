@@ -9,9 +9,10 @@ import { RegisterUserDto } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateUserPasswordDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
+import { Company, CompanyDocument } from 'src/companies/schemas/company.schema';
 import * as bcrypt from 'bcryptjs';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
-import mongoose from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import aqp from 'api-query-params';
 import { IUser } from './users.interface';
 import { OtpsService } from 'src/otps/otps.service';
@@ -22,6 +23,7 @@ import { Role } from 'src/decorator/customize';
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: SoftDeleteModel<UserDocument>,
+    @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
     @Inject(forwardRef(() => OtpsService))
     private readonly otpService: OtpsService,
     private readonly mailService: MailService,
@@ -202,8 +204,19 @@ export class UsersService {
     return await this.userModel.countDocuments();
   }
 
-  // Remove HR from company
-  async removeHrFromCompany(hrId: string, companyId: string) {
+  // Remove HR from company (only company creator or admin)
+  async removeHrFromCompany(hrId: string, companyId: string, requester: IUser) {
+    // Check if requester is admin or company creator
+    if (requester.role !== Role.ADMIN) {
+      const company = await this.companyModel.findOne({ _id: companyId });
+      if (!company) {
+        throw new NotFoundException('Công ty không tồn tại');
+      }
+      if (company.createdBy?._id?.toString() !== requester._id.toString()) {
+        throw new BadRequestException('Chỉ người tạo công ty mới có quyền xóa HR khác');
+      }
+    }
+
     const hr = await this.userModel.findOne({ _id: hrId, role: Role.HR, isDeleted: false });
     if (!hr) {
       throw new NotFoundException('HR not found');
@@ -219,6 +232,36 @@ export class UsersService {
     );
 
     return { message: 'Xóa HR khỏi công ty thành công' };
+  }
+
+  // Leave company (for non-creator HRs)
+  async leaveCompany(user: IUser) {
+    const currentUser = await this.userModel.findOne({ _id: user._id, isDeleted: false });
+    if (!currentUser) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    if (!currentUser.company) {
+      throw new BadRequestException('Bạn hiện không thuộc công ty nào');
+    }
+
+    const companyId = currentUser.company._id.toString();
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) {
+      throw new NotFoundException('Công ty không tồn tại');
+    }
+
+    // Creator cannot leave their own company
+    if (company.createdBy?._id?.toString() === user._id.toString()) {
+      throw new BadRequestException('Người tạo công ty không thể rời công ty. Hãy chuyển quyền hoặc xóa công ty.');
+    }
+
+    await this.userModel.updateOne(
+      { _id: user._id },
+      { $unset: { company: 1 } },
+    );
+
+    return { message: 'Rời công ty thành công' };
   }
 
   // Lock user account (Admin only)

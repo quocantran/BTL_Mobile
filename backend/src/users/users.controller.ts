@@ -121,7 +121,16 @@ export class UsersController {
     @Body() body: { hrId: string; companyId: string },
     @User() user: IUser,
   ) {
-    return this.usersService.removeHrFromCompany(body.hrId, body.companyId);
+    return this.usersService.removeHrFromCompany(body.hrId, body.companyId, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR)
+  @ApiOperation({ summary: 'Leave company (for non-creator HRs)' })
+  @ApiBearerAuth()
+  @Post('/leave-company')
+  leaveCompany(@User() user: IUser) {
+    return this.usersService.leaveCompany(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

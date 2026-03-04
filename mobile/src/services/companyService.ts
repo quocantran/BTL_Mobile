@@ -125,4 +125,15 @@ export const companyService = {
     const response = await api.get(`/companies/${companyId}/pending-hrs`);
     return response.data;
   },
+
+  // Check if current user is the company creator
+  async isCompanyCreator(companyId: string): Promise<IApiResponse<boolean>> {
+    const response = await api.get(`/companies/${companyId}/is-creator`);
+    return response.data;
+  },
+
+  async leaveCompany(): Promise<IApiResponse<any>> {
+    const response = await api.post('/users/leave-company');
+    return response.data;
+  },
 };

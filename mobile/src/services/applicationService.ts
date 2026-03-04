@@ -61,14 +61,16 @@ export const applicationService = {
     return response.data;
   },
 
-  // Search applications by CV content (skills, education)
+  // Search applications by CV content (skills, education, address, certificates)
   async searchApplicationsByCV(
     jobId: string,
-    params: { skills?: string; education?: string },
+    params: { skills?: string; education?: string; address?: string; certificates?: string },
   ): Promise<IApiResponse<ICVSearchResponse>> {
     const queryParams = new URLSearchParams();
     if (params.skills) queryParams.append('skills', params.skills);
     if (params.education) queryParams.append('education', params.education);
+    if (params.address) queryParams.append('address', params.address);
+    if (params.certificates) queryParams.append('certificates', params.certificates);
     const response = await api.get(`/applications/by-job/${jobId}/search-cv?${queryParams.toString()}`);
     return response.data;
   },

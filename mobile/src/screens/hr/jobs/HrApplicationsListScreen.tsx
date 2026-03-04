@@ -223,6 +223,9 @@ const HrApplicationsListScreen: React.FC = () => {
   const [skillInput, setSkillInput] = useState('');
   const [skillTags, setSkillTags] = useState<string[]>([]);
   const [educationInput, setEducationInput] = useState('');
+  const [addressInput, setAddressInput] = useState('');
+  const [certInput, setCertInput] = useState('');
+  const [certTags, setCertTags] = useState<string[]>([]);
 
   // Calculate status counts
   const getStatusCounts = () => {
@@ -285,10 +288,24 @@ const HrApplicationsListScreen: React.FC = () => {
     setSkillTags(prev => prev.filter(t => t !== tag));
   }, []);
 
+  // Add certificate tag
+  const addCertTag = useCallback(() => {
+    const tag = certInput.trim();
+    if (tag && !certTags.includes(tag)) {
+      setCertTags(prev => [...prev, tag]);
+    }
+    setCertInput('');
+  }, [certInput, certTags]);
+
+  // Remove certificate tag
+  const removeCertTag = useCallback((tag: string) => {
+    setCertTags(prev => prev.filter(t => t !== tag));
+  }, []);
+
   // Execute CV search
   const executeCvSearch = async () => {
-    if (skillTags.length === 0 && !educationInput.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập ít nhất một tiêu chí tìm kiếm (skills hoặc education)');
+    if (skillTags.length === 0 && !educationInput.trim() && !addressInput.trim() && certTags.length === 0) {
+      Alert.alert('Thông báo', 'Vui lòng nhập ít nhất một tiêu chí tìm kiếm');
       return;
     }
 
@@ -297,6 +314,8 @@ const HrApplicationsListScreen: React.FC = () => {
       const res = await applicationService.searchApplicationsByCV(jobId, {
         skills: skillTags.length > 0 ? skillTags.join(',') : undefined,
         education: educationInput.trim() || undefined,
+        address: addressInput.trim() || undefined,
+        certificates: certTags.length > 0 ? certTags.join(',') : undefined,
       });
       setCvSearchResults(res.data.result || []);
       setCvSearchActive(true);
@@ -314,6 +333,8 @@ const HrApplicationsListScreen: React.FC = () => {
     setCvSearchResults([]);
     setSkillTags([]);
     setEducationInput('');
+    setAddressInput('');
+    setCertTags([]);
   }, []);
 
   useEffect(() => {
@@ -420,7 +441,31 @@ const HrApplicationsListScreen: React.FC = () => {
                 </View>
               </View>
             )}
-            {matchInfo.matchedInParsedText && matchInfo.matchedSkills.length === 0 && matchInfo.matchedEducation.length === 0 && (
+            {matchInfo.matchedAddress && (
+              <View style={styles.matchRow}>
+                <Ionicons name="location" size={13} color={COLORS.primary} />
+                <Text style={styles.matchLabel}>Địa chỉ:</Text>
+                <View style={styles.matchTagsRow}>
+                  <View style={styles.matchAddressTag}>
+                    <Text style={styles.matchAddressTagText}>Phù hợp</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            {matchInfo.matchedCertificates && matchInfo.matchedCertificates.length > 0 && (
+              <View style={styles.matchRow}>
+                <Ionicons name="ribbon" size={13} color="#8b5cf6" />
+                <Text style={styles.matchLabel}>Chứng chỉ:</Text>
+                <View style={styles.matchTagsRow}>
+                  {matchInfo.matchedCertificates.map((cert, idx) => (
+                    <View key={idx} style={styles.matchCertTag}>
+                      <Text style={styles.matchCertTagText} numberOfLines={1}>{cert}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {matchInfo.matchedInParsedText && matchInfo.matchedSkills.length === 0 && matchInfo.matchedEducation.length === 0 && !matchInfo.matchedAddress && (!matchInfo.matchedCertificates || matchInfo.matchedCertificates.length === 0) && (
               <View style={styles.matchRow}>
                 <Ionicons name="document-text-outline" size={13} color={COLORS.warning} />
                 <Text style={styles.matchParsedText}>Ứng viên có CV phù hợp với tiêu chí tìm kiếm</Text>
@@ -481,6 +526,8 @@ const HrApplicationsListScreen: React.FC = () => {
               {cvSearchResults.length} kết quả
               {skillTags.length > 0 ? ` | Skills: ${skillTags.join(', ')}` : ''}
               {educationInput.trim() ? ` | Education: ${educationInput.trim()}` : ''}
+              {addressInput.trim() ? ` | Địa chỉ: ${addressInput.trim()}` : ''}
+              {certTags.length > 0 ? ` | Chứng chỉ: ${certTags.join(', ')}` : ''}
             </Text>
           </View>
           <TouchableOpacity onPress={clearCvSearch} style={styles.cvSearchBannerClose}>
@@ -628,7 +675,7 @@ const HrApplicationsListScreen: React.FC = () => {
                 <Ionicons name="search" size={22} color={COLORS.primary} />
                 <Text style={styles.modalTitle}>Tìm kiếm theo CV</Text>
               </View>
-              <Text style={styles.modalSubtitle}>Tìm ứng viên theo kỹ năng và học vấn</Text>
+              <Text style={styles.modalSubtitle}>Tìm ứng viên theo nhiều tiêu chí</Text>
             </View>
             <TouchableOpacity 
               style={styles.modalCloseBtn}
@@ -706,11 +753,74 @@ const HrApplicationsListScreen: React.FC = () => {
               />
             </View>
 
+            {/* Address Section */}
+            <View style={styles.cvSearchSection}>
+              <View style={styles.cvSearchSectionHeader}>
+                <Ionicons name="location" size={18} color={COLORS.primary} />
+                <Text style={styles.cvSearchSectionTitle}>Địa chỉ</Text>
+              </View>
+              <Text style={styles.cvSearchHint}>
+                Nhập từ khóa về địa chỉ, thành phố, tỉnh...
+              </Text>
+
+              <TextInput
+                style={styles.educationInputField}
+                placeholder="VD: Hà Nội, TP. Hồ Chí Minh, Đà Nẵng..."
+                placeholderTextColor={COLORS.gray[400]}
+                value={addressInput}
+                onChangeText={setAddressInput}
+                multiline={false}
+              />
+            </View>
+
+            {/* Certificates Section */}
+            <View style={styles.cvSearchSection}>
+              <View style={styles.cvSearchSectionHeader}>
+                <Ionicons name="ribbon" size={18} color="#8b5cf6" />
+                <Text style={styles.cvSearchSectionTitle}>Chứng chỉ</Text>
+              </View>
+              <Text style={styles.cvSearchHint}>
+                Nhập từng chứng chỉ và nhấn "Thêm" hoặc Enter
+              </Text>
+
+              <View style={styles.skillInputRow}>
+                <TextInput
+                  style={styles.skillInputField}
+                  placeholder="VD: TOEIC, AWS, PMP..."
+                  placeholderTextColor={COLORS.gray[400]}
+                  value={certInput}
+                  onChangeText={setCertInput}
+                  onSubmitEditing={addCertTag}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity 
+                  style={[styles.addSkillBtn, !certInput.trim() && styles.addSkillBtnDisabled, certInput.trim() ? { backgroundColor: '#8b5cf6' } : {}]}
+                  onPress={addCertTag}
+                  disabled={!certInput.trim()}
+                >
+                  <Ionicons name="add" size={20} color={COLORS.white} />
+                </TouchableOpacity>
+              </View>
+
+              {certTags.length > 0 && (
+                <View style={styles.skillTagsContainer}>
+                  {certTags.map((tag, idx) => (
+                    <View key={idx} style={styles.searchCertTag}>
+                      <Text style={styles.searchCertTagText}>{tag}</Text>
+                      <TouchableOpacity onPress={() => removeCertTag(tag)}>
+                        <Ionicons name="close-circle" size={16} color="#8b5cf6" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
             {/* Info box */}
             <View style={styles.cvSearchInfoBox}>
               <Ionicons name="information-circle-outline" size={18} color={COLORS.gray[500]} />
               <Text style={styles.cvSearchInfoText}>
-                Tìm kiếm sẽ so khớp trong nội dung CV của ứng viên.
+                Tìm kiếm sẽ so khớp trong nội dung CV của ứng viên. Khi nhập nhiều tiêu chí, ứng viên phải thỏa mãn tất cả.
               </Text>
             </View>
 
@@ -718,7 +828,7 @@ const HrApplicationsListScreen: React.FC = () => {
             <View style={styles.cvSearchActions}>
               <TouchableOpacity
                 style={styles.cvSearchClearBtn}
-                onPress={() => { setSkillTags([]); setEducationInput(''); }}
+                onPress={() => { setSkillTags([]); setEducationInput(''); setAddressInput(''); setCertTags([]); }}
               >
                 <Text style={styles.cvSearchClearBtnText}>Xóa tất cả</Text>
               </TouchableOpacity>
@@ -726,10 +836,10 @@ const HrApplicationsListScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.cvSearchSubmitBtn,
-                  (skillTags.length === 0 && !educationInput.trim()) && styles.cvSearchSubmitBtnDisabled,
+                  (skillTags.length === 0 && !educationInput.trim() && !addressInput.trim() && certTags.length === 0) && styles.cvSearchSubmitBtnDisabled,
                 ]}
                 onPress={executeCvSearch}
-                disabled={cvSearchLoading || (skillTags.length === 0 && !educationInput.trim())}
+                disabled={cvSearchLoading || (skillTags.length === 0 && !educationInput.trim() && !addressInput.trim() && certTags.length === 0)}
               >
                 {cvSearchLoading ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
@@ -1057,6 +1167,44 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
     fontWeight: '500',
     fontStyle: 'italic',
+  },
+  matchAddressTag: {
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  matchAddressTagText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  matchCertTag: {
+    backgroundColor: '#8b5cf615',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    maxWidth: '70%',
+  },
+  matchCertTagText: {
+    fontSize: 11,
+    color: '#8b5cf6',
+    fontWeight: '600',
+  },
+  searchCertTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8b5cf615',
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  searchCertTagText: {
+    fontSize: 14,
+    color: '#8b5cf6',
+    fontWeight: '600',
   },
   // CV Search Modal styles
   cvSearchModalContent: {

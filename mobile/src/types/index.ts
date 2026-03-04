@@ -258,6 +258,8 @@ export interface ICreateSubscriberDto {
 export interface ICVSearchMatchInfo {
   matchedSkills: string[];
   matchedEducation: string[];
+  matchedAddress: boolean;
+  matchedCertificates: string[];
   matchedInParsedText: boolean;
 }
 

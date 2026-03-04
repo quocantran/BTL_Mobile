@@ -20,7 +20,10 @@ import { UsersService } from 'src/users/users.service';
 import { Role } from 'src/decorator/customize';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { CreateNotificationDto } from 'src/notifications/dto/create-notification.dto';
-import { NotificationTargetType, NotificationType } from 'src/notifications/schemas/notification.schema';
+import {
+  NotificationTargetType,
+  NotificationType,
+} from 'src/notifications/schemas/notification.schema';
 
 @Injectable()
 export class CompaniesService {
@@ -169,10 +172,9 @@ export class CompaniesService {
       (item) => item.toString() === user._id.toString(),
     );
 
-    if (userFollow){
+    if (userFollow) {
       throw new BadRequestException('User already follow company');
     }
-    
 
     await this.companyModel
       .findByIdAndUpdate(
@@ -213,7 +215,7 @@ export class CompaniesService {
       { _id: companyId },
       { isActive: newActiveStatus },
     );
-    
+
     // Update all jobs belonging to this company with new isActive status
     await this.jobModel.updateMany(
       { 'company._id': new mongoose.Types.ObjectId(companyId) },
@@ -304,7 +306,8 @@ export class CompaniesService {
     const companyObj = company.toObject() as any;
     companyObj.hrs = hrsInCompany;
     // Keep hr for backward compatibility (first HR)
-    companyObj.hr = hrsInCompany && hrsInCompany.length > 0 ? hrsInCompany[0] : null;
+    companyObj.hr =
+      hrsInCompany && hrsInCompany.length > 0 ? hrsInCompany[0] : null;
 
     const jobCount = await this.jobModel.countDocuments({
       'company._id': company._id,
@@ -430,32 +433,42 @@ export class CompaniesService {
       },
     );
 
-    // Notify all HRs in the company
-    if (hrsInCompany && hrsInCompany.length > 0) {
-      const hrIds = hrsInCompany.map((hr) => hr._id.toString());
-      const content = `${user.name} (${user.email}) muốn tham gia công ty ${company.name}. Hãy duyệt yêu cầu!`;
-      await this.notificationService.createBulk(
-        hrIds,
-        'Yêu cầu tham gia công ty',
-        content,
-        NotificationType.COMPANY,
-        NotificationTargetType.COMPANY,
-        companyId,
-        { companyId, requestUserId: user._id.toString() },
-      );
-    }
+    // Notify to HR who created the company
+
+    const hrId = company.createdBy?._id?.toString();
+
+    const content = `${user.name} (${user.email}) muốn tham gia công ty ${company.name}. Hãy duyệt yêu cầu!`;
+    await this.notificationService.create({
+      userId: hrId,
+      title: 'Yêu cầu tham gia công ty',
+      content,
+      type: NotificationType.COMPANY,
+      targetType: NotificationTargetType.COMPANY,
+      targetId: companyId,
+      data: { companyId, requestUserId: user._id.toString() },
+    });
 
     return { message: 'Đã gửi yêu cầu tham gia công ty. Vui lòng chờ duyệt!' };
   }
 
   // Approve HR join request
   async approveHrRequest(companyId: string, userId: string, approver: IUser) {
-    if (!mongoose.Types.ObjectId.isValid(companyId) || !mongoose.Types.ObjectId.isValid(userId)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(companyId) ||
+      !mongoose.Types.ObjectId.isValid(userId)
+    ) {
       throw new BadRequestException('Invalid ID');
     }
 
     const company = await this.companyModel.findOne({ _id: companyId });
     if (!company) throw new NotFoundException('Company not found');
+
+    // Only the company creator can approve HR requests
+    if (company.createdBy?._id?.toString() !== approver._id.toString()) {
+      throw new BadRequestException(
+        'Chỉ người tạo công ty mới có quyền duyệt yêu cầu tham gia',
+      );
+    }
 
     const pending = company.pendingHrs || [];
     const request = pending.find((p) => p.userId === userId);
@@ -493,12 +506,22 @@ export class CompaniesService {
 
   // Reject HR join request
   async rejectHrRequest(companyId: string, userId: string, approver: IUser) {
-    if (!mongoose.Types.ObjectId.isValid(companyId) || !mongoose.Types.ObjectId.isValid(userId)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(companyId) ||
+      !mongoose.Types.ObjectId.isValid(userId)
+    ) {
       throw new BadRequestException('Invalid ID');
     }
 
     const company = await this.companyModel.findOne({ _id: companyId });
     if (!company) throw new NotFoundException('Company not found');
+
+    // Only the company creator can reject HR requests
+    if (company.createdBy?._id?.toString() !== approver._id.toString()) {
+      throw new BadRequestException(
+        'Chỉ người tạo công ty mới có quyền từ chối yêu cầu tham gia',
+      );
+    }
 
     const pending = company.pendingHrs || [];
     const request = pending.find((p) => p.userId === userId);
@@ -525,6 +548,14 @@ export class CompaniesService {
     await this.notificationService.create(notiObj as CreateNotificationDto);
 
     return { message: `Đã từ chối yêu cầu của ${request.name}` };
+  }
+
+  // Check if a user is the company creator
+  async isCompanyCreator(companyId: string, userId: string): Promise<boolean> {
+    if (!mongoose.Types.ObjectId.isValid(companyId)) return false;
+    const company = await this.companyModel.findOne({ _id: companyId });
+    if (!company) return false;
+    return company.createdBy?._id?.toString() === userId;
   }
 
   // Get pending HR requests for a company

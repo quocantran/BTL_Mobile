@@ -15,14 +15,15 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppSelector } from "../../../store/hooks";
+import { useAppSelector, useAppDispatch } from "../../../store/hooks";
 import { companyService } from "../../../services/companyService";
 import { Loading } from "../../../components/common/Loading";
 import { COLORS } from "../../../constants";
 import RenderHTML from "react-native-render-html";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, CommonActions } from "@react-navigation/native";
 import { ICompany, ICompanyPendingHr } from "@/types";
 import { NativeStackNavigationProp } from "node_modules/@react-navigation/native-stack/lib/typescript/src/types";
+import { getProfile } from "../../../store/slices/authSlice";
 
 type HrStackParamList = {
   HrCompanyUpdate: { company: ICompany };
@@ -37,6 +38,7 @@ interface IHrUser {
 
 const HrCompanyDetailScreen: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
   const companyId = user?.company?._id;
   const [company, setCompany] = useState<ICompany | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,7 @@ const HrCompanyDetailScreen: React.FC = () => {
   const [pendingHrs, setPendingHrs] = useState<ICompanyPendingHr[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [processingHr, setProcessingHr] = useState<string | null>(null);
+  const [isCreator, setIsCreator] = useState(false);
 
   const load = async () => {
     if (!companyId) return;
@@ -72,12 +75,25 @@ const HrCompanyDetailScreen: React.FC = () => {
   useEffect(() => {
     load();
     loadPendingHrs();
+    checkIsCreator();
     const unsubscribe = navigation.addListener('focus', () => {
       load();
       loadPendingHrs();
+      checkIsCreator();
     });
     return unsubscribe;
   }, [companyId, navigation]);
+
+  // Check if current user is the company creator
+  const checkIsCreator = async () => {
+    if (!companyId) return;
+    try {
+      const res = await companyService.isCompanyCreator(companyId);
+      setIsCreator(res.data === true);
+    } catch {
+      setIsCreator(false);
+    }
+  };
 
   // Remove HR from company
   const handleRemoveHr = (hr: IHrUser) => {
@@ -169,6 +185,29 @@ const HrCompanyDetailScreen: React.FC = () => {
               Alert.alert('Lỗi', err.response?.data?.message || 'Không thể từ chối yêu cầu');
             } finally {
               setProcessingHr(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleLeaveCompany = () => {
+    Alert.alert(
+      'Rời công ty',
+      'Bạn có chắc chắn muốn rời khỏi công ty? Sau khi rời, bạn sẽ về trạng thái chưa thuộc công ty nào.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Rời công ty',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await companyService.leaveCompany();
+              Alert.alert('Thành công', 'Bạn đã rời khỏi công ty');
+              dispatch(getProfile());
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.response?.data?.message || 'Không thể rời công ty');
             }
           },
         },
@@ -334,7 +373,7 @@ const HrCompanyDetailScreen: React.FC = () => {
                         <Text style={styles.hrYouBadge}>Bạn</Text>
                       )}
                     </View>
-                    {hr._id !== user?._id && (
+                    {isCreator && hr._id !== user?._id && (
                       <TouchableOpacity
                         style={styles.removeHrButton}
                         onPress={() => handleRemoveHr(hr)}
@@ -413,6 +452,18 @@ const HrCompanyDetailScreen: React.FC = () => {
                 Cập nhật thông tin công ty đầy đủ và hấp dẫn sẽ giúp thu hút nhiều ứng viên tiềm năng hơn.
               </Text>
             </View>
+
+            {/* Leave Company Button (non-creator only) */}
+            {!isCreator && (
+              <TouchableOpacity
+                style={styles.leaveCompanyButton}
+                onPress={handleLeaveCompany}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
+                <Text style={styles.leaveCompanyButtonText}>Rời công ty</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </ScrollView>
@@ -464,36 +515,43 @@ const HrCompanyDetailScreen: React.FC = () => {
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.pendingActions}>
-                      <TouchableOpacity
-                        style={styles.rejectButton}
-                        onPress={() => handleRejectHr(item)}
-                        disabled={processingHr === item.userId}
-                      >
-                        {processingHr === item.userId ? (
-                          <ActivityIndicator size="small" color={COLORS.danger} />
-                        ) : (
-                          <>
-                            <Ionicons name="close-circle-outline" size={18} color={COLORS.danger} />
-                            <Text style={styles.rejectButtonText}>Từ chối</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.approveButton}
-                        onPress={() => handleApproveHr(item)}
-                        disabled={processingHr === item.userId}
-                      >
-                        {processingHr === item.userId ? (
-                          <ActivityIndicator size="small" color={COLORS.white} />
-                        ) : (
-                          <>
-                            <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
-                            <Text style={styles.approveButtonText}>Duyệt</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                    {isCreator ? (
+                      <View style={styles.pendingActions}>
+                        <TouchableOpacity
+                          style={styles.rejectButton}
+                          onPress={() => handleRejectHr(item)}
+                          disabled={processingHr === item.userId}
+                        >
+                          {processingHr === item.userId ? (
+                            <ActivityIndicator size="small" color={COLORS.danger} />
+                          ) : (
+                            <>
+                              <Ionicons name="close-circle-outline" size={18} color={COLORS.danger} />
+                              <Text style={styles.rejectButtonText}>Từ chối</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.approveButton}
+                          onPress={() => handleApproveHr(item)}
+                          disabled={processingHr === item.userId}
+                        >
+                          {processingHr === item.userId ? (
+                            <ActivityIndicator size="small" color={COLORS.white} />
+                          ) : (
+                            <>
+                              <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
+                              <Text style={styles.approveButtonText}>Duyệt</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.pendingViewOnly}>
+                        <Ionicons name="eye-outline" size={16} color={COLORS.gray[500]} />
+                        <Text style={styles.pendingViewOnlyText}>Chỉ người tạo công ty mới có quyền duyệt</Text>
+                      </View>
+                    )}
                   </View>
                 )}
                 ListEmptyComponent={
@@ -927,6 +985,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  pendingViewOnly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingLeft: 57,
+    gap: 6,
+    backgroundColor: COLORS.gray[50],
+    borderRadius: 8,
+  },
+  pendingViewOnlyText: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  leaveCompanyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+    gap: 8,
+  },
+  leaveCompanyButtonText: {
+    color: COLORS.danger,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

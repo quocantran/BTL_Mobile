@@ -144,4 +144,11 @@ export class CompaniesController {
     return this.companiesService.getPendingHrs(id);
   }
 
+  @Get(':id/is-creator')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.HR, Role.ADMIN)
+  isCompanyCreator(@Param('id') id: string, @User() user: IUser) {
+    return this.companiesService.isCompanyCreator(id, user._id.toString());
+  }
+
 }

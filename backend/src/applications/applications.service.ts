@@ -508,12 +508,12 @@ export class ApplicationsService {
   }
 
   /**
-   * Search applications by CV content (skills, education)
+   * Search applications by CV content (skills, education, address, certificates)
    * Searches both structured UserCV fields and parsedText
    */
   async searchByCV(
     jobId: string,
-    query: { skills?: string; education?: string },
+    query: { skills?: string; education?: string; address?: string; certificates?: string },
     user: IUser,
   ) {
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
@@ -524,45 +524,75 @@ export class ApplicationsService {
       ? query.skills.split(',').map(s => s.trim()).filter(Boolean)
       : [];
     const educationKeyword = query.education?.trim() || '';
+    const addressKeyword = query.address?.trim() || '';
+    const certificatesKeywords = query.certificates
+      ? query.certificates.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
 
-    if (skillKeywords.length === 0 && !educationKeyword) {
-      throw new BadRequestException('Vui lòng nhập ít nhất một tiêu chí tìm kiếm (skills hoặc education)');
+    if (skillKeywords.length === 0 && !educationKeyword && !addressKeyword && certificatesKeywords.length === 0) {
+      throw new BadRequestException('Vui lòng nhập ít nhất một tiêu chí tìm kiếm');
     }
 
-    // Build $or conditions to match in UserCV structured fields AND parsedText
-    const cvOrConditions: any[] = [];
+    // Build $and conditions: each criterion is an $or group (structured OR parsedText)
+    // ALL criteria must match (AND logic between different filter types)
+    const andConditions: any[] = [];
 
     if (skillKeywords.length > 0) {
-      // Escape regex special chars
       const skillRegexes = skillKeywords.map(
         s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
       );
-
-      // Match in UserCV.skills array
-      cvOrConditions.push({ 'cv.skills': { $in: skillRegexes } });
-
-      // Match in UserCV.parsedText
       const skillsPattern = skillKeywords
         .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
         .join('|');
-      cvOrConditions.push({
-        'cv.parsedText': { $regex: skillsPattern, $options: 'i' },
+
+      andConditions.push({
+        $or: [
+          { 'cv.skills': { $in: skillRegexes } },
+          { 'cv.parsedText': { $regex: skillsPattern, $options: 'i' } },
+        ],
       });
     }
 
     if (educationKeyword) {
       const escapedEdu = educationKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      // Match in UserCV.education array
-      cvOrConditions.push({
-        'cv.education': { $elemMatch: { $regex: escapedEdu, $options: 'i' } },
-      });
-
-      // Match in UserCV.parsedText
-      cvOrConditions.push({
-        'cv.parsedText': { $regex: escapedEdu, $options: 'i' },
+      andConditions.push({
+        $or: [
+          { 'cv.education': { $elemMatch: { $regex: escapedEdu, $options: 'i' } } },
+          { 'cv.parsedText': { $regex: escapedEdu, $options: 'i' } },
+        ],
       });
     }
+
+    if (addressKeyword) {
+      const escapedAddr = addressKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'user.address': { $regex: escapedAddr, $options: 'i' } },
+          { 'cv.parsedText': { $regex: escapedAddr, $options: 'i' } },
+        ],
+      });
+    }
+
+    if (certificatesKeywords.length > 0) {
+      const certRegexes = certificatesKeywords.map(
+        s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      );
+      const certsPattern = certificatesKeywords
+        .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+
+      andConditions.push({
+        $or: [
+          { 'cv.certificates': { $in: certRegexes } },
+          { 'cv.parsedText': { $regex: certsPattern, $options: 'i' } },
+        ],
+      });
+    }
+
+    // Build the filter match stage
+    const contentFilter = andConditions.length === 1
+      ? andConditions[0]
+      : { $and: andConditions };
 
     const pipeline: any[] = [
       // 1. Match applications for this job
@@ -582,9 +612,7 @@ export class ApplicationsService {
         },
       },
       { $unwind: '$cv' },
-      // 3. Filter by CV content
-      { $match: { $or: cvOrConditions } },
-      // 4. Lookup User info
+      // 3. Lookup User info (needed for address filtering)
       {
         $lookup: {
           from: 'users',
@@ -594,6 +622,8 @@ export class ApplicationsService {
         },
       },
       { $unwind: '$user' },
+      // 4. Filter by criteria
+      { $match: contentFilter },
       // 5. Project needed fields
       {
         $project: {
@@ -607,6 +637,7 @@ export class ApplicationsService {
             title: '$cv.title',
             skills: '$cv.skills',
             education: '$cv.education',
+            certificates: '$cv.certificates',
             fileType: '$cv.fileType',
           },
           userId: {
@@ -614,6 +645,7 @@ export class ApplicationsService {
             name: '$user.name',
             email: '$user.email',
             avatar: '$user.avatar',
+            address: '$user.address',
           },
         },
       },
@@ -627,6 +659,8 @@ export class ApplicationsService {
     const enrichedResults = results.map(app => {
       const matchedSkills: string[] = [];
       const matchedEducation: string[] = [];
+      const matchedCertificates: string[] = [];
+      let matchedAddress = false;
       let matchedInParsedText = false;
 
       if (skillKeywords.length > 0 && app.cvId?.skills?.length) {
@@ -649,8 +683,26 @@ export class ApplicationsService {
         }
       }
 
+      if (addressKeyword && app.userId?.address) {
+        if (app.userId.address.toLowerCase().includes(addressKeyword.toLowerCase())) {
+          matchedAddress = true;
+        }
+      }
+
+      if (certificatesKeywords.length > 0 && app.cvId?.certificates?.length) {
+        for (const cert of app.cvId.certificates) {
+          if (
+            certificatesKeywords.some(kw =>
+              cert.toLowerCase().includes(kw.toLowerCase()),
+            )
+          ) {
+            matchedCertificates.push(cert);
+          }
+        }
+      }
+
       // Check if match came from parsedText (no structured match found)
-      if (matchedSkills.length === 0 && matchedEducation.length === 0) {
+      if (matchedSkills.length === 0 && matchedEducation.length === 0 && !matchedAddress && matchedCertificates.length === 0) {
         matchedInParsedText = true;
       }
 
@@ -659,6 +711,8 @@ export class ApplicationsService {
         matchInfo: {
           matchedSkills,
           matchedEducation,
+          matchedAddress,
+          matchedCertificates,
           matchedInParsedText,
         },
       };
