@@ -45,6 +45,7 @@ export class SubscribersService {
     return createdSkillIds;
   }
 
+  // Create or update a subscription. Handles both existing and new skill IDs.
   async createOrUpdate(createSubscriberDto: CreateSubscriberDto, user: IUser) {
     let allSkillIds: string[] = [...(createSubscriberDto.skills || [])];
 
@@ -136,6 +137,7 @@ export class SubscribersService {
     return result;
   }
 
+  // Update subscription skills and other fields
   async update(id: string, updateSubscriberDto: UpdateSubscriberDto, user: IUser) {
     if (updateSubscriberDto.skills) {
       updateSubscriberDto.skills.forEach((skill) => {
@@ -163,6 +165,7 @@ export class SubscribersService {
     return result;
   }
 
+  // Toggle subscription active/inactive status (user can pause notifications)
   async toggleActive(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Subscriber not found');
@@ -208,6 +211,7 @@ export class SubscribersService {
     return this.subscriberModel.countDocuments({ isActive: true, isDeleted: false });
   }
 
+  // Find subscriber record by email
   async getSubscriberByEmail(email: string) {
     const subscriber = await this.subscriberModel
       .findOne({ email, isDeleted: false })
@@ -218,6 +222,7 @@ export class SubscribersService {
     return subscriber;
   }
 
+  // Find subscriber record by userId (for logged-in user)
   async getSubscriberByUserId(userId: string) {
     const subscriber = await this.subscriberModel
       .findOne({ userId, isDeleted: false })
@@ -228,6 +233,7 @@ export class SubscribersService {
     return subscriber;
   }
 
+  // Soft delete a subscription
   async remove(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Subscriber not found');

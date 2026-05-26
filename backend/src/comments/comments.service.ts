@@ -16,6 +16,7 @@ export class CommentsService {
     private readonly commentModel: SoftDeleteModel<CommentDocument>,
   ) {}
 
+  // Create a new comment (root or reply). For replies, shifts Nested Set left/right values.
   async create(createCommentDto: CreateCommentDto, user: IUser) {
     const { companyId, content, parentId } = createCommentDto;
 
@@ -32,6 +33,7 @@ export class CommentsService {
 
     let rightValue: number;
 
+    // Root comment: set left/right to max+1, max+2
     if (!parentId) {
       const maxRightValue = await this.commentModel.findOne(
         {
@@ -47,6 +49,7 @@ export class CommentsService {
         rightValue = 1;
       }
     } else {
+      // Reply: shift all nodes with right >= parent.right by +2, then insert
       const parentComment = await this.commentModel.findOne({
         _id: parentId,
       });
@@ -88,6 +91,7 @@ export class CommentsService {
     });
   }
 
+  // Get all comments with pagination
   async findAll(qs: any) {
     try {
       const { filter, sort, population } = aqp(qs);
@@ -126,6 +130,7 @@ export class CommentsService {
     }
   }
 
+  // Get direct child replies of a parent comment, with pagination
   async findByParent(parentId: string, qs: any) {
     if (!mongoose.Types.ObjectId.isValid(parentId)) {
       throw new BadRequestException('Invalid company id');
@@ -168,6 +173,7 @@ export class CommentsService {
     }
   }
 
+  // Get root-level comments for a company (no parentId), with pagination
   async findByCompany(companyId: string, qs: any) {
     if (!mongoose.Types.ObjectId.isValid(companyId)) {
       throw new BadRequestException('Invalid company id');
@@ -214,6 +220,7 @@ export class CommentsService {
     }
   }
 
+  // Delete a comment and all its nested children using Nested Set width calculation
   async remove(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid comment id');
@@ -234,16 +241,19 @@ export class CommentsService {
       );
     }
 
+    // Calculate width to determine how many nodes (including children) to remove
     const leftValue = comment.left;
     const rightValue = comment.right;
     const width = rightValue - leftValue + 1;
 
+    // Delete all nodes within the left-right range (this node + all children)
     await this.commentModel.deleteMany({
       company: comment.company,
       left: { $gte: leftValue },
       right: { $lte: rightValue },
     });
 
+    // Shift left/right values of remaining nodes to fill the gap
     await this.commentModel.updateMany(
       {
         company: comment.company,

@@ -19,6 +19,7 @@ export class MailService {
     private readonly jobModel: SoftDeleteModel<JobDocument>,
   ) {}
 
+  // Send OTP verification email to user
   async sendOtp(email: string, otp: string) {
     await this.mailerService.sendMail({
       to: email,
@@ -30,6 +31,7 @@ export class MailService {
     });
   }
 
+  // Send password reset email with token link
   async sendForgotPassword(email: string, token: string) {
     await this.mailerService.sendMail({
       to: email,
@@ -41,6 +43,7 @@ export class MailService {
     });
   }
 
+  // Send interview invitation email with custom HTML content
   async sendInterviewInvite(email: string, subject: string, content: string) {
     await this.mailerService.sendMail({
       to: email,
@@ -49,6 +52,7 @@ export class MailService {
     });
   }
 
+  // Send welcome email after registration
   async sendWelcome(email: string, name: string) {
     await this.mailerService.sendMail({
       to: email,
@@ -61,7 +65,8 @@ export class MailService {
   }
 
   // Run every 1 minute for testing (change to CronExpression.EVERY_DAY_AT_8AM for production)
-  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  // Cron job: runs every 11 hours, sends matching job notifications to active subscribers in batches
+  @Cron(CronExpression.EVERY_11_HOURS)
   async sendJobNotificationCron() {
     this.logger.log('Starting job notification cron job...');
 
@@ -124,6 +129,7 @@ export class MailService {
     }
   }
 
+  // Find jobs matching subscriber's skills and send summary email via Handlebars template
   private async sendJobNotificationToSubscriber(subscriber: SubscriberDocument) {
     const skillNames = subscriber.skills.map((skill: any) => skill.name);
 
@@ -138,7 +144,7 @@ export class MailService {
     const now = new Date();
     const jobs = await this.jobModel
       .find({
-        skills: { $in: ["FULLSTACK"] },
+        skills: { $in: skillNames.map((name: string) => new RegExp(name, 'i')) },
         isActive: true,
         isDeleted: false,
         endDate: { $gt: now },
@@ -169,6 +175,7 @@ export class MailService {
   }
 
   // Keep the old method for manual triggering if needed
+  // Manual trigger version of job notification (for admin use)
   async sendJobNotification() {
     const subscribers = await this.subscriberModel.find({
       isActive: true,
@@ -179,7 +186,7 @@ export class MailService {
     });
 
     for (const subscriber of subscribers) {
-      // QUAN TRỌNG: Job.skills lưu dạng string[], không phải ObjectId
+      // IMPORTANT: Job.skills stores string[], not ObjectId. Query using skill name regex.
       const skillNames = subscriber.skills.map((skill: any) => skill.name);
       const skillRegexes = skillNames.map((name: string) => new RegExp(name, 'i'));
 

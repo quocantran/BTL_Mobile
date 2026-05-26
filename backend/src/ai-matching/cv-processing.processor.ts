@@ -16,6 +16,7 @@ export interface CVProcessingJobData {
   jobLevel: string;
 }
 
+// Bull Queue Worker: processes CV matching jobs asynchronously in background
 @Processor('cv-processing')
 export class CVProcessingProcessor {
   private readonly logger = new Logger(CVProcessingProcessor.name);
@@ -26,6 +27,7 @@ export class CVProcessingProcessor {
     private readonly cvMatchResultModel: Model<CVMatchResultDocument>,
   ) {}
 
+  // Main processor: runs AI matching pipeline for a single CV against JD
   @Process('process-cv')
   async handleProcessCV(job: Job<CVProcessingJobData>) {
     const { cvMatchResultId, cvText, jobName, jobDescription, jobSkills, jobLevel } = job.data;
@@ -56,7 +58,7 @@ export class CVProcessingProcessor {
         jobSkills,
       );
 
-      // 3. Generate CV embedding for future use
+      // Step 3: Generate and store CV embedding vector for future similarity queries
       const cvEmbedding = matchResult.cvText 
         ? await this.aiMatchingService.generateEmbedding(matchResult.cvText)
         : [];
@@ -88,6 +90,7 @@ export class CVProcessingProcessor {
     }
   }
 
+  // Retry processor: re-runs failed/pending jobs by loading original data from DB
   @Process('reprocess-cv')
   async handleReprocessCV(job: Job<{ cvMatchResultId: string }>) {
     const result = await this.cvMatchResultModel.findById(job.data.cvMatchResultId).populate([

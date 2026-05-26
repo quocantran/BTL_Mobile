@@ -8,17 +8,21 @@ export interface ICreateCommentDto {
   parentId?: string;
 }
 
+// Service for company comment API calls from mobile
 export const commentService = {
+  // Get root comments by company, with pagination
   async getCommentsByCompany(companyId: string, page: number = 1, limit: number = 10): Promise<IApiResponse<IPaginatedResponse<IComment>>> {
     const response = await api.get(`/comments/by-company/${companyId}?current=${page}&pageSize=${limit}`);
     return response.data;
   },
 
+  // Get child replies by parentId
   async getCommentsByParent(parentId: string, page: number = 1, limit: number = 10): Promise<IApiResponse<IPaginatedResponse<IComment>>> {
     const response = await api.get(`/comments/parent/${parentId}?current=${page}&pageSize=${limit}`);
     return response.data;
   },
 
+  // Create a new comment (root or reply)
   async createComment(data: ICreateCommentDto): Promise<IApiResponse<IComment>> {
     const response = await api.post('/comments', data);
     return response.data;
@@ -29,6 +33,7 @@ export const commentService = {
     return response.data;
   },
 
+  // Delete a comment (including child replies)
   async deleteComment(id: string): Promise<IApiResponse<any>> {
     const response = await api.delete(`/comments/${id}`);
     return response.data;

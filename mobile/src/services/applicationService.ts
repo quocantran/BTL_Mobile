@@ -8,22 +8,27 @@ export interface ICreateApplicationDto {
   coverLetter?: string;
 }
 
+// Service for application API calls from mobile
 export const applicationService = {
+  // Submit a job application with selected CV
   async apply(data: ICreateApplicationDto): Promise<IApiResponse<IApplication>> {
     const response = await api.post('/applications', data);
     return response.data;
   },
 
+  // Get current user's application list
   async getMyApplications(): Promise<IApiResponse<IApplication[]>> {
     const response = await api.get('/applications/my-applications');
     return response.data;
   },
 
+  // Get application details by ID
   async getApplicationById(id: string): Promise<IApiResponse<IApplication>> {
     const response = await api.get(`/applications/${id}`);
     return response.data;
   },
 
+  // Withdraw an application (soft delete)
   async withdrawApplication(id: string): Promise<IApiResponse<any>> {
     const response = await api.delete(`/applications/${id}`);
     return response.data;
@@ -40,6 +45,7 @@ export const applicationService = {
     return response.data;
   },
 
+  // Get applications by job (HR views candidates)
   async getApplicationsByJob(jobId: string, params: any = {}): Promise<IApiResponse<IPaginatedResponse<IApplication>>> {
     const queryParams = new URLSearchParams();
     if (params.current) queryParams.append('current', params.current.toString());
@@ -50,6 +56,7 @@ export const applicationService = {
     return response.data;
   },
 
+  // HR updates application status (REVIEWING/APPROVED/REJECTED)
   async updateApplicationStatus(id: string, status: string): Promise<IApiResponse<IApplication>> {
     const response = await api.patch(`/applications/${id}/status`, { status });
     return response.data;

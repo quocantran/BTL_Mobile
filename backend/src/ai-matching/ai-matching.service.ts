@@ -7,6 +7,8 @@ let env: any;
 let pdfParse: any;
 let mammoth: any;
 
+// AI Matching Service: handles embedding generation, cosine similarity,
+// and CV-to-JD matching using local Xenova/all-MiniLM-L6-v2 model
 @Injectable()
 export class AIMatchingService implements OnModuleInit {
   private readonly logger = new Logger(AIMatchingService.name);
@@ -398,8 +400,9 @@ export class AIMatchingService implements OnModuleInit {
   }
 
   /**
-   * Calculate match score with improved algorithm
-   * Prioritizes skill matching and boosts score when skills are found
+   * Calculate final match score using weighted formula:
+   * 40% semantic similarity (from embedding cosine) + 60% skill match ratio
+   * Applies bonus for high skill coverage to produce realistic scores
    */
   private calculateMatchScore(
     semanticScore: number,
@@ -456,6 +459,7 @@ export class AIMatchingService implements OnModuleInit {
     missingSkills: string[];
     explanation: string;
   }> {
+    // Reject CVs with too little text to analyze meaningfully
     if (!cvText || cvText.length < 50) {
       return {
         cvText: cvText || '',
@@ -466,7 +470,7 @@ export class AIMatchingService implements OnModuleInit {
       };
     }
 
-    // 1. Generate CV embedding
+    // Step 1: Generate 384-dimensional embedding vector for CV text
     const cvEmbedding = await this.generateEmbedding(cvText);
     
     if (cvEmbedding.length === 0) {
@@ -479,16 +483,16 @@ export class AIMatchingService implements OnModuleInit {
       };
     }
 
-    // 2. Calculate semantic similarity
+    // Step 2: Calculate cosine similarity between JD and CV embeddings (0-1)
     const semanticScore = this.cosineSimilarity(jdEmbedding, cvEmbedding);
 
-    // 3. Extract skills match
+    // Step 3: Keyword-based skill matching (exact + variation matching)
     const { matchedSkills, missingSkills } = this.extractSkillsFromText(cvText, jobSkills);
 
-    // 4. Calculate final score with improved algorithm
+    // Step 4: Combine semantic + skill scores with weighted formula
     const matchScore = this.calculateMatchScore(semanticScore, matchedSkills, jobSkills);
 
-    // 5. Generate explanation
+    // Step 5: Generate human-readable explanation text
     const explanation = this.generateExplanation(matchScore, matchedSkills, missingSkills);
 
     this.logger.log(`CV Match: semantic=${semanticScore.toFixed(3)}, skills=${matchedSkills.length}/${jobSkills.length}, final=${matchScore.toFixed(3)}`);

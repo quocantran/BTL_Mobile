@@ -8,6 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 
+// WebSocket Gateway for realtime notifications via Socket.IO
 @WebSocketGateway({ cors: true })
 @Injectable()
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -18,6 +19,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   // Map userId to socketId(s)
   private userSockets: Map<string, Set<string>> = new Map();
 
+  // Handle client connection: store userId -> socketId mapping
   handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
     if (userId) {
@@ -27,6 +29,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     }
   }
 
+  // Handle client disconnect: remove socketId from mapping
   handleDisconnect(client: Socket) {
     for (const [userId, sockets] of this.userSockets.entries()) {
       if (sockets.has(client.id)) {
@@ -38,6 +41,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     }
   }
 
+  // Send event to all sockets of a user (supports multi-device)
   sendToUser(userId: string, event: string, data: any) {
     const sockets = this.userSockets.get(userId);
     if (sockets) {

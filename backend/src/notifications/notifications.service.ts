@@ -15,6 +15,7 @@ export class NotificationsService {
     private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
+  // Create a single notification and push it via WebSocket in realtime
   async create(createNotificationDto: CreateNotificationDto) {
     const { userId, title, content, type, targetType, targetId, data } = createNotificationDto;
 
@@ -32,12 +33,13 @@ export class NotificationsService {
       data,
     });
 
-    // Gửi socket tới user
+    // Emit socket event to target user
     this.notificationsGateway.sendToUser(userId, 'notification', notification);
 
     return notification;
   }
 
+  // Create multiple notifications at once (used for notifying HR list or followers)
   async createBulk(
     userIds: string[],
     title: string,
@@ -58,13 +60,14 @@ export class NotificationsService {
     }));
 
     const result = await this.notificationModel.insertMany(notifications);
-    // Gửi socket tới từng user
+    // Emit socket event to each user in the list
     userIds.forEach((userId, idx) => {
       this.notificationsGateway.sendToUser(userId, 'notification', result[idx]);
     });
     return result;
   }
 
+  // Get paginated notifications for a user, including unread count
   async findByUser(userId: string, page: number, limit: number) {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new BadRequestException('User not found');
@@ -99,6 +102,7 @@ export class NotificationsService {
     };
   }
 
+  // Mark a single notification as read
   async markAsRead(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Notification not found');
@@ -111,6 +115,7 @@ export class NotificationsService {
     );
   }
 
+  // Mark all user's notifications as read
   async markAllAsRead(user: IUser) {
     return this.notificationModel.updateMany(
       { user: user._id, isRead: false },
@@ -118,6 +123,7 @@ export class NotificationsService {
     );
   }
 
+  // Soft delete a notification
   async remove(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Notification not found');
@@ -129,6 +135,7 @@ export class NotificationsService {
     });
   }
 
+  // Count unread notifications for a user
   async getUnreadCount(userId: string) {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new BadRequestException('User not found');

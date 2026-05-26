@@ -185,6 +185,7 @@ export class JobsService {
     };
   }
 
+  // Create a new job posting. Validates HR's company, then notifies all followers.
   async create(createJobDto: CreateJobDto, user: IUser) {
     const userInDb = await this.usersService.findOneByEmail(user.email);
 
@@ -227,7 +228,7 @@ export class JobsService {
       },
     });
 
-    //send notification to all users following the company with navigation target
+    // Send notification to all users following this company about the new job
     await this.notificationsService.createBulk(
       company.usersFollow.map(id => id.toString()),
       'Công ty ' + company.name + ' vừa đăng tuyển công việc mới',

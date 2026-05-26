@@ -41,6 +41,7 @@ export class CompaniesService {
     private jobModel: Model<JobDocument>,
   ) {}
 
+  // Create a new company (Admin only), invalidate Redis cache
   async create(createCompanyDto: CreateCompanyDto, user: IUser) {
     const companyExist = await this.companyModel.findOne({
       name: createCompanyDto.name,
@@ -162,6 +163,8 @@ export class CompaniesService {
     return response;
   }
 
+  // User follows a company. Adds userId to usersFollow array.
+  // Sends realtime notification to all HRs of the company.
   async followCompany(company: FollowCompanyDto, user: IUser) {
     const { companyId } = company;
 
@@ -184,7 +187,7 @@ export class CompaniesService {
       )
       .exec();
 
-    //send notification to all hrs when user follow company
+    // Send notification to all HRs when user follows company
     const hrsInCompany = await this.usersService.findAllByCompanyId(companyId);
     if (hrsInCompany && hrsInCompany.length > 0) {
       for (const hr of hrsInCompany) {

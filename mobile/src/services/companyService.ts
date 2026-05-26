@@ -10,7 +10,9 @@ export interface ICompanySearchParams {
   isActive?: boolean;
 }
 
+// Service for company API calls from mobile
 export const companyService = {
+  // Get paginated company list with filters
   async getCompanies(params: ICompanySearchParams = {}): Promise<IApiResponse<IPaginatedResponse<ICompany>>> {
     const queryParams = new URLSearchParams();
     
@@ -24,21 +26,25 @@ export const companyService = {
     return response.data;
   },
 
+  // Get company details by ID
   async getCompanyById(id: string): Promise<IApiResponse<ICompany>> {
     const response = await api.get(`/companies/${id}`);
     return response.data;
   },
 
+  // Follow a company (sends notification to HRs)
   async followCompany(companyId: string): Promise<IApiResponse<any>> {
     const response = await api.post('/companies/follow', { companyId });
     return response.data;
   },
 
+  // Unfollow a company
   async unfollowCompany(companyId: string): Promise<IApiResponse<any>> {
     const response = await api.post('/companies/unfollow', { companyId });
     return response.data;
   },
 
+  // Get list of followed companies
   async getFollowedCompanies(): Promise<IApiResponse<ICompany[]>> {
     const response = await api.get('/users/followed-companies');
     return response.data;

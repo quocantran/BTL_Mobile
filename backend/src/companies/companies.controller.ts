@@ -61,12 +61,14 @@ export class CompaniesController {
     return this.companiesService.remove(id, user);
   }
 
+  // Follow a company + send notification to all HRs
   @UseGuards(JwtAuthGuard)
   @Post('/follow')
   followCompany(@Body() body: FollowCompanyDto, @User() user: IUser) {
     return this.companiesService.followCompany(body, user);
   }
 
+  // Unfollow a company
   @UseGuards(JwtAuthGuard)
   @Post('/unfollow')
   unfollowCompany(@Body() body: FollowCompanyDto, @User() user: IUser) {

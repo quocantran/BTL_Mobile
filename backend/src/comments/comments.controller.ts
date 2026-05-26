@@ -24,27 +24,32 @@ import { ApiTags } from '@nestjs/swagger';
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
+  // Create a new comment (root or nested reply)
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() createCommentDto: CreateCommentDto, @User() user: IUser) {
     return this.commentsService.create(createCommentDto, user);
   }
 
+  // Get root comments by company (cached 30s)
   @CacheTTL(30)
   @Get()
   findAll(@Query() qs: string) {
     return this.commentsService.findAll(qs);
   }
 
+  // Get root comments by companyId, with pagination
   @Get('/by-company/:companyId')
   findByCompany(@Param('companyId') companyId: string, @Query() qs: string) {
     return this.commentsService.findByCompany(companyId, qs);
   }
+  // Get child replies by parentId
   @Get('/parent/:parentId')
   findByParent(@Param('parentId') parentId: string, @Query() qs: string) {
     return this.commentsService.findByParent(parentId, qs);
   }
 
+  // Delete comment + all nested replies (updates Nested Set)
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   remove(@Param('id') id: string, @User() user: IUser) {

@@ -16,7 +16,7 @@ export class MailController {
   @Roles(Role.HR)
   @ResponseMessage('Send interview invite email')
   async sendInterviewInvite(@Body() body: { email: string; subject: string; content: string }) {
-    // Gửi mail async, trả về response ngay
+    // Send email asynchronously, return response immediately
     this.mailService.sendInterviewInvite(body.email, body.subject, body.content);
     return { message: 'Interview invite is being sent' };
   }

@@ -55,8 +55,8 @@ export class ApplicationsService {
       throw new BadRequestException('CV không tồn tại hoặc không thuộc về bạn');
     }
 
-    // Cho phép nộp lại nhiều lần (đã bỏ check duplicate)
-    // User có thể rút đơn và nộp lại với CV khác
+    // Allow re-applying multiple times (duplicate check removed)
+    // User can withdraw and re-apply with a different CV
 
     // Get job details for AI processing
     const job = await this.jobsService.findOne(jobId);
@@ -533,7 +533,7 @@ export class ApplicationsService {
       throw new BadRequestException('Vui lòng nhập ít nhất một tiêu chí tìm kiếm');
     }
 
-    // Build $and conditions: each criterion is an $or group (structured OR parsedText)
+    // Build AND conditions: each criterion is an OR group (structured OR parsedText)
     // ALL criteria must match (AND logic between different filter types)
     const andConditions: any[] = [];
 

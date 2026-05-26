@@ -21,6 +21,7 @@ import { ApiTags } from '@nestjs/swagger';
 export class SubscribersController {
   constructor(private readonly subscribersService: SubscribersService) {}
 
+  // Create or update job notification subscription
   @Post()
   @UseGuards(JwtAuthGuard)
   create(@Body() createSubscriberDto: CreateSubscriberDto, @User() user: IUser) {
@@ -37,6 +38,7 @@ export class SubscribersController {
     return this.subscribersService.update(id, updateSubscriberDto, user);
   }
 
+  // Get current user's subscription info
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMySubscription(@User() user: IUser) {
@@ -49,12 +51,14 @@ export class SubscribersController {
     return this.subscribersService.getSubscriberByEmail(user.email);
   }
 
+  // Toggle subscription active/inactive
   @Patch('toggle-active/:id')
   @UseGuards(JwtAuthGuard)
   toggleActive(@Param('id') id: string, @User() user: IUser) {
     return this.subscribersService.toggleActive(id, user);
   }
 
+  // Delete subscription (soft delete)
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string, @User() user: IUser) {

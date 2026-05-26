@@ -23,6 +23,7 @@ import { ApiTags } from '@nestjs/swagger';
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 
+  // Submit a job application + queue AI matching
   @UseGuards(JwtAuthGuard)
   @Post()
   @ResponseMessage('Nộp đơn ứng tuyển thành công')
@@ -38,6 +39,7 @@ export class ApplicationsController {
     return this.applicationsService.findAll(qs, user);
   }
 
+  // Get current user's submitted applications
   @UseGuards(JwtAuthGuard)
   @Get('my-applications')
   @ResponseMessage('Lấy danh sách đơn ứng tuyển của tôi')
@@ -57,6 +59,7 @@ export class ApplicationsController {
     return this.applicationsService.findByJob(jobId, qs, user);
   }
 
+  // Search candidates by CV content (skills, education, address)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HR)
   @Get('by-job/:jobId/search-cv')
@@ -72,6 +75,7 @@ export class ApplicationsController {
     return this.applicationsService.searchByCV(jobId, { skills, education, address, certificates }, user);
   }
 
+  // Get AI-ranked candidates by match score
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HR)
   @Get('by-job/:jobId/ai-rank')
@@ -92,6 +96,7 @@ export class ApplicationsController {
     return this.applicationsService.findOne(id);
   }
 
+  // HR updates application status -> sends notification to candidate
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HR)
   @Patch(':id/status')
@@ -104,6 +109,7 @@ export class ApplicationsController {
     return this.applicationsService.updateStatus(id, updateDto, user);
   }
 
+  // Withdraw application (soft delete + remove AI match result)
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   @ResponseMessage('Hủy đơn ứng tuyển thành công')

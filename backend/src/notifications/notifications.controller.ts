@@ -19,6 +19,7 @@ import { ApiTags } from '@nestjs/swagger';
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  // Get paginated notifications for the current user
   @Get()
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Get notifications')
@@ -34,6 +35,7 @@ export class NotificationsController {
     );
   }
 
+  // Count unread notifications for the current user
   @Get('unread-count')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Get unread count')
@@ -42,6 +44,7 @@ export class NotificationsController {
   }
 
 
+  // Mark a single notification as read by ID
   @Patch(':id/read')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Mark notification as read')
@@ -49,6 +52,7 @@ export class NotificationsController {
     return this.notificationsService.markAsRead(id, user);
   }
 
+  // Mark all notifications as read
   @Post('mark-all-read')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Mark all notifications as read')
@@ -56,6 +60,7 @@ export class NotificationsController {
     return this.notificationsService.markAllAsRead(user);
   }
 
+  // Delete a notification (soft delete)
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Delete notification')
